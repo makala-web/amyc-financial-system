@@ -1,0 +1,363 @@
+﻿'use client';
+
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { z } from 'zod';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { db, getCategories } from '@/lib/db-offline';
+import { addTransaction } from '@/lib/storage/transaction-store';
+import {
+  notifyTransactionsChanged,
+  queueTransactionCreate,
+  transactionSaveToast,
+} from '@/lib/transaction-sync';
+import { useAuthStore, useFinancialStore } from '@/lib/store';
+import { DEPARTMENTS, MONTHS } from '@/lib/types';
+import type { Category, Department, OrgLevel } from '@/lib/types';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Form, FormControl, FormField, FormItem, FormLabel, FormMessage,
+} from '@/components/ui/form';
+import { toast } from 'sonner';
+import { CalendarIcon, PlusCircle, ChevronDown } from 'lucide-react';
+import { format } from 'date-fns';
+
+// Zod schema
+const incomeSchema = z.object({
+  date: z.date(),
+  categoryId: z.string().min(1, 'Chagua chanzo cha mapato'),
+  department: z.string().min(1, 'Chagua idara'),
+  amount: z.coerce.number().min(1, 'Kiasi lazima kiwe zaidi ya 0'),
+  description: z.string().optional(),
+});
+
+type IncomeFormValues = z.infer<typeof incomeSchema>;
+
+export default function IncomeForm() {
+  const { currentOrg, currentUser } = useAuthStore();
+  const { setSelectedYear, setSelectedMonth } = useFinancialStore();
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+
+  const form = useForm<IncomeFormValues>({
+    resolver: zodResolver(incomeSchema) as any,
+    defaultValues: {
+      date: new Date(),
+      categoryId: '',
+      department: '',
+      amount: 0,
+      description: '',
+    },
+  });
+
+  // Load income categories
+  useEffect(() => {
+    async function loadCategories() {
+      const cats = await getCategories('income');
+      setCategories(cats);
+    }
+    loadCategories();
+  }, []);
+
+  // Auto-fill month/year when date changes
+  const watchedDate = form.watch('date');
+  useEffect(() => {
+    if (watchedDate) {
+      setSelectedMonth(watchedDate.getMonth() + 1);
+      setSelectedYear(watchedDate.getFullYear());
+    }
+  }, [watchedDate, setSelectedMonth, setSelectedYear]);
+
+  // Add new category
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    const orgLevel = currentOrg?.type || 'tawi';
+    await db.categories.add({
+      name: newCategoryName.trim(),
+      type: 'income',
+      isActive: true,
+      isDefault: false,
+      orgLevel: orgLevel as OrgLevel,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    const cats = await getCategories('income');
+    setCategories(cats);
+    setNewCategoryName('');
+    setShowAddCategory(false);
+    toast.success('Kundi jipya limeongezwa!');
+  };
+
+  // Submit form
+  const onSubmit = async (data: IncomeFormValues) => {
+    if (!currentOrg || !currentUser) {
+      toast.error('Tafadhali ingia kwanza');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const selectedCategory = categories.find(c => c.id === Number(data.categoryId));
+      const month = data.date.getMonth() + 1;
+      const year = data.date.getFullYear();
+
+      const localId = (await addTransaction({
+        type: 'income',
+        amount: data.amount,
+        date: data.date.toISOString(),
+        month,
+        year,
+        department: data.department as Department,
+        categoryId: Number(data.categoryId),
+        category_name: selectedCategory?.name || '',
+        description: data.description || '',
+        source: selectedCategory?.name || '',
+        orgUnitId: currentOrg.id!,
+        orgUnitName: currentOrg.name,
+        orgLevel: currentOrg.type,
+        enteredBy: currentUser.id!,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      })) as number;
+
+      const saved = await db.transactions.get(localId);
+      if (saved?.id) {
+        queueTransactionCreate(saved as typeof saved & { id: number });
+      }
+      notifyTransactionsChanged({
+        orgUnitId: currentOrg.id!,
+        orgLevel: currentOrg.type,
+        type: 'income',
+        year,
+        month,
+      });
+
+      toast.success(`Mapato yameingizwa kikamilifu! ${transactionSaveToast(navigator.onLine)}`);
+      form.reset({
+        date: new Date(),
+        categoryId: '',
+        department: '',
+        amount: 0,
+        description: '',
+      });
+    } catch (err) {
+      console.error('Error saving income:', err);
+      toast.error('Kuna hitilafu. Jaribu tena.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardHeader className="p-4 sm:p-6">
+        <CardTitle className="text-lg sm:text-xl text-emerald-700 flex items-center gap-2">
+          <PlusCircle className="size-5" />
+          Ingiza Mapato
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 sm:space-y-5">
+            {/* Date Picker */}
+            <FormField
+              control={form.control}
+              name="date"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tarehe</FormLabel>
+                  <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          className="w-full justify-start text-left font-normal border-emerald-200 min-h-[44px]"
+                        >
+                          <CalendarIcon className="size-4 mr-2 text-emerald-600" />
+                          {field.value ? format(field.value, 'dd/MM/yyyy') : 'Chagua tarehe'}
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={field.value}
+                        onSelect={(date) => {
+                          field.onChange(date);
+                          setCalendarOpen(false);
+                        }}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Auto-filled Month/Year display */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Mwezi</p>
+                <p className="text-sm font-medium px-3 py-2 bg-muted rounded-md border">
+                  {watchedDate ? MONTHS[watchedDate.getMonth()] : '-'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">Mwaka</p>
+                <p className="text-sm font-medium px-3 py-2 bg-muted rounded-md border">
+                  {watchedDate ? watchedDate.getFullYear() : '-'}
+                </p>
+              </div>
+            </div>
+
+            {/* Income Source / Category */}
+            <FormField
+              control={form.control}
+              name="categoryId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Chanzo cha Mapato</FormLabel>
+                  <div className="flex gap-2">
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger className="flex-1 border-emerald-200 min-h-[44px]">
+                          <SelectValue placeholder="Chagua chanzo" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {categories.map(cat => (
+                          <SelectItem key={cat.id} value={String(cat.id)}>
+                            {cat.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="shrink-0 border-emerald-300 text-emerald-600 hover:bg-emerald-50 h-11 w-11"
+                      onClick={() => setShowAddCategory(!showAddCategory)}
+                    >
+                      <PlusCircle className="size-4" />
+                    </Button>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Add Category Panel */}
+            {showAddCategory && (
+              <div className="flex gap-2 items-end border border-dashed border-emerald-300 rounded-lg p-3 bg-emerald-50/50">
+                <div className="flex-1">
+                  <label className="text-xs font-medium text-emerald-700 mb-1 block">Kundi Jipya</label>
+                  <Input
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="Jina la kundi jipya..."
+                    className="border-emerald-200"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                  onClick={handleAddCategory}
+                >
+                  Ongeza
+                </Button>
+              </div>
+            )}
+
+            {/* Department */}
+            <FormField
+              control={form.control}
+              name="department"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Idara</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger className="border-emerald-200 min-h-[44px]">
+                        <SelectValue placeholder="Chagua idara" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {DEPARTMENTS.map(dept => (
+                        <SelectItem key={dept} value={dept}>
+                          {dept}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Amount */}
+            <FormField
+              control={form.control}
+              name="amount"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Kiasi (TSh)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      min={1}
+                      step={1}
+                      placeholder="0"
+                      className="border-emerald-200 min-h-[44px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Description */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Maelezo</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="Maelezo ya mapato..."
+                      className="border-emerald-200 min-h-[80px]"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Submit */}
+            <Button
+              type="submit"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white min-h-[44px]"
+              disabled={submitting}
+            >
+              {submitting ? 'Inahifadhi...' : 'Hifadhi Mapato'}
+            </Button>
+          </form>
+        </Form>
+      </CardContent>
+    </Card>
+  );
+}

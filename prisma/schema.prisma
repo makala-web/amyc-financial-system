@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                       Int                 @id @default(autoincrement())
+  username                 String?             @unique
+  email                    String              @unique
+  fullName                 String?
+  passwordHash             String?
+  role                     String
+  orgLevel                 String
+  orgUnitId                Int?
+  loginAttempts            Int                 @default(0)
+  lockedUntil              DateTime?
+  lastLoginAt              DateTime?
+  securityQuestion         String?
+  securityAnswerHash       String?
+  isActive                 Boolean             @default(true)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  approvalSteps            ApprovalStep[]      @relation("ApprovalStepUser")
+  uploadedAttachments      Attachment[]        @relation("AttachmentUploader")
+  auditLogs                AuditLog[]
+  approvedBudgets          Budget[]            @relation("BudgetApprover")
+  createdBudgets           Budget[]            @relation("BudgetCreator")
+  importedBatches          ImportBatch[]
+  generatedMarkazReports   MarkazReport[]      @relation("MarkazReportGeneratedBy")
+  generatedMonthlyBalances MonthlyBalance[]    @relation("MonthlyBalanceGeneratedBy")
+  approvedSubmissions      MonthlySubmission[] @relation("MonthlySubmissionApprover")
+  submittedSubmissions     MonthlySubmission[] @relation("MonthlySubmissionSubmitter")
+  authoredNotes            Note[]
+  notifications            Notification[]      @relation("NotificationUser")
+  generatedRegionalReports RegionalReport[]    @relation("RegionalReportGeneratedBy")
+  approvedTransactions     Transaction[]       @relation("TransactionApprover")
+  transactionsReviewed     Transaction[]       @relation("TransactionReviewer")
+  transactionsEntered      Transaction[]       @relation("TransactionEnteredBy")
+  orgUnit                  OrgUnit?            @relation(fields: [orgUnitId], references: [id])
+
+  @@map("users")
+}
+
+model OrgUnit {
+  id                  Int                 @id @default(autoincrement())
+  name                String
+  type                String
+  parentId            Int?
+  code                String
+  isActive            Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  attachments         Attachment[]        @relation("OrgUnitAttachments")
+  budgets             Budget[]
+  categories          Category[]
+  importBatchesTarget ImportBatch[]       @relation("ImportBatchTarget")
+  importBatchesSource ImportBatch[]       @relation("ImportBatchSource")
+  markazReports       MarkazReport[]      @relation("MarkazReports")
+  monthlyBalances     MonthlyBalance[]
+  submissions         MonthlySubmission[] @relation("OrgUnitSubmissions")
+  notes               Note[]
+  notifications       Notification[]      @relation("OrgUnitNotifications")
+  parent              OrgUnit?            @relation("OrgUnitParent", fields: [parentId], references: [id])
+  children            OrgUnit[]           @relation("OrgUnitParent")
+  regionalReports     RegionalReport[]    @relation("RegionalReports")
+  transactions        Transaction[]
+  users               User[]
+
+  @@map("org_units")
+}
+
+model Category {
+  id           Int           @id @default(autoincrement())
+  name         String
+  type         String
+  isActive     Boolean       @default(true)
+  isDefault    Boolean       @default(false)
+  orgLevel     String?
+  orgUnitId    Int?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sortOrder    Int?          @default(0)
+  orgUnit      OrgUnit?      @relation(fields: [orgUnitId], references: [id])
+  transactions Transaction[]
+
+  @@unique([name, type, orgLevel], name: "name_type_orgLevel")
+  @@map("categories")
+}
+
+model Transaction {
+  id              Int          @id @default(autoincrement())
+  type            String
+  amount          Float
+  date            DateTime
+  month           Int
+  year            Int
+  department      String?
+  categoryId      Int?
+  categoryName    String?
+  description     String?
+  source          String?
+  vendor          String?
+  quantity        Float?
+  unitPrice       Float?
+  unit            String?
+  financialYear   Int?
+  orgUnitId       Int
+  orgUnitName     String?
+  orgLevel        String?
+  approvalStatus  String       @default("entered")
+  isSubmitted     Boolean      @default(false)
+  submittedAt     DateTime?
+  isLocked        Boolean      @default(false)
+  isOpening       Boolean      @default(false)
+  enteredBy       Int?
+  reviewerId      Int?
+  approverId      Int?
+  reviewedAt      DateTime?
+  reviewNotes     String?
+  approvedAt      DateTime?
+  approvalNotes   String?
+  rejectedAt      DateTime?
+  rejectedBy      Int?
+  rejectionReason String?
+  importBatchId   Int?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  attachments     Attachment[]
+  importBatch     ImportBatch? @relation(fields: [importBatchId], references: [id])
+  orgUnit         OrgUnit      @relation(fields: [orgUnitId], references: [id])
+  approver        User?        @relation("TransactionApprover", fields: [approverId], references: [id])
+  reviewer        User?        @relation("TransactionReviewer", fields: [reviewerId], references: [id])
+  enteredByUser   User?        @relation("TransactionEnteredBy", fields: [enteredBy], references: [id])
+  category        Category?    @relation(fields: [categoryId], references: [id])
+
+  @@map("transactions")
+}
+
+model MonthlySubmission {
+  id              Int       @id @default(autoincrement())
+  orgUnitId       Int
+  month           Int
+  year            Int
+  isSubmitted     Boolean   @default(false)
+  submittedAt     DateTime?
+  approvalStatus  String    @default("entered")
+  submitterId     Int?
+  approverId      Int?
+  totalIncome     Float?    @default(0)
+  totalExpense    Float?    @default(0)
+  netBalance      Float?    @default(0)
+  notes           String?
+  isConsolidated  Boolean   @default(false)
+  childDataJson   String?
+  reviewedBy      Int?
+  reviewedAt      DateTime?
+  reviewNotes     String?
+  approvedAt      DateTime?
+  approvalNotes   String?
+  rejectedBy      Int?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  approver        User?     @relation("MonthlySubmissionApprover", fields: [approverId], references: [id])
+  submitter       User?     @relation("MonthlySubmissionSubmitter", fields: [submitterId], references: [id])
+  orgUnit         OrgUnit   @relation("OrgUnitSubmissions", fields: [orgUnitId], references: [id])
+
+  @@unique([orgUnitId, month, year], name: "orgUnitId_month_year")
+  @@map("monthly_submissions")
+}
+
+model ImportBatch {
+  id           Int           @id @default(autoincrement())
+  fileName     String
+  fileSize     Int?
+  sourceOrgId  Int?
+  targetOrgId  Int
+  importType   String
+  recordCount  Int
+  status       String
+  importedBy   Int?
+  errors       String?
+  validCount   Int?          @default(0)
+  errorCount   Int?          @default(0)
+  processedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  importer     User?         @relation(fields: [importedBy], references: [id])
+  targetOrg    OrgUnit       @relation("ImportBatchTarget", fields: [targetOrgId], references: [id])
+  sourceOrg    OrgUnit?      @relation("ImportBatchSource", fields: [sourceOrgId], references: [id])
+  transactions Transaction[]
+
+  @@map("import_batches")
+}
+
+model Note {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  type      String?
+  priority  String?
+  isPinned  Boolean? @default(false)
+  orgUnitId Int?
+  createdBy Int?
+  authorId  Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User?    @relation(fields: [authorId], references: [id])
+  orgUnit   OrgUnit? @relation(fields: [orgUnitId], references: [id])
+
+  @@map("notes")
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  action    String
+  entity    String
+  entityId  Int
+  userId    Int
+  details   String?
+  oldValue  String?
+  newValue  String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
+
+model Budget {
+  id            Int      @id @default(autoincrement())
+  orgUnitId     Int
+  year          Int
+  department    String
+  category      String
+  type          String
+  plannedAmount Float
+  notes         String?
+  createdBy     Int?
+  approverId    Int?
+  isApproved    Boolean  @default(false)
+  actualAmount  Float?   @default(0)
+  variance      Float?   @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  approver      User?    @relation("BudgetApprover", fields: [approverId], references: [id])
+  creator       User?    @relation("BudgetCreator", fields: [createdBy], references: [id])
+  orgUnit       OrgUnit  @relation(fields: [orgUnitId], references: [id])
+
+  @@unique([orgUnitId, year, department, category, type], name: "orgUnitId_year_department_category_type")
+  @@map("budgets")
+}
+
+model BudgetItem {
+  id         Int     @id @default(autoincrement())
+  budgetId   Int
+  type       String
+  categoryId Int?
+  department String?
+  month      Int?
+  amount     Float?
+
+  @@map("budget_items")
+}
+
+model Notification {
+  id         Int       @id @default(autoincrement())
+  userId     Int
+  type       String    @default("system")
+  title      String    @default("")
+  message    String
+  entityType String?
+  entityId   Int?
+  orgUnitId  Int?
+  priority   String    @default("normal")
+  isRead     Boolean   @default(false)
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+  orgUnit    OrgUnit?  @relation("OrgUnitNotifications", fields: [orgUnitId], references: [id])
+  user       User      @relation("NotificationUser", fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model Attachment {
+  id            Int          @id @default(autoincrement())
+  fileName      String
+  fileType      String?
+  fileSize      Int?
+  fileData      String?
+  filePath      String?
+  description   String?
+  category      String?
+  transactionId Int?
+  orgUnitId     Int?
+  uploadedBy    Int?
+  createdAt     DateTime     @default(now())
+  uploader      User?        @relation("AttachmentUploader", fields: [uploadedBy], references: [id])
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+  orgUnit       OrgUnit?     @relation("OrgUnitAttachments", fields: [orgUnitId], references: [id])
+
+  @@map("attachments")
+}
+
+model ApprovalStep {
+  id             Int      @id @default(autoincrement())
+  name           String?
+  order          Int?
+  role           String?
+  entityType     String?
+  entityId       Int?
+  step           String?
+  userId         Int?
+  notes          String?
+  previousStatus String?
+  newStatus      String?
+  createdAt      DateTime @default(now())
+  user           User?    @relation("ApprovalStepUser", fields: [userId], references: [id])
+
+  @@map("approval_steps")
+}
+
+model SyncQueue {
+  id        Int      @id @default(autoincrement())
+  payload   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+
+  @@map("sync_queue")
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String?
+  type      String?
+  category  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model MonthlyBalance {
+  id              Int      @id @default(autoincrement())
+  orgUnitId       Int
+  month           Int
+  year            Int
+  openingBalance  Float    @default(0)
+  totalIncome     Float    @default(0)
+  totalExpense    Float    @default(0)
+  closingBalance  Float    @default(0)
+  carryForward    Float?   @default(0)
+  generatedBy     Int?
+  generatedAt     DateTime @default(now())
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  generatedByUser User?    @relation("MonthlyBalanceGeneratedBy", fields: [generatedBy], references: [id])
+  orgUnit         OrgUnit  @relation(fields: [orgUnitId], references: [id])
+
+  @@unique([orgUnitId, month, year], name: "orgUnitId_month_year")
+  @@map("monthly_balances")
+}
+
+model RegionalReport {
+  id               Int      @id @default(autoincrement())
+  regionId         Int
+  month            Int
+  year             Int
+  openingBalance   Float    @default(0)
+  totalIncome      Float    @default(0)
+  totalExpense     Float    @default(0)
+  closingBalance   Float    @default(0)
+  carryForward     Float?   @default(0)
+  branchCount      Int      @default(0)
+  incomeBreakdown  String?
+  expenseBreakdown String?
+  generatedBy      Int?
+  generatedAt      DateTime @default(now())
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  generatedByUser  User?    @relation("RegionalReportGeneratedBy", fields: [generatedBy], references: [id])
+  region           OrgUnit  @relation("RegionalReports", fields: [regionId], references: [id])
+
+  @@unique([regionId, month, year], name: "regionId_month_year")
+  @@map("regional_reports")
+}
+
+model MarkazReport {
+  id               Int      @id @default(autoincrement())
+  markazId         Int
+  month            Int
+  year             Int
+  openingBalance   Float    @default(0)
+  totalIncome      Float    @default(0)
+  totalExpense     Float    @default(0)
+  closingBalance   Float    @default(0)
+  carryForward     Float?   @default(0)
+  regionCount      Int      @default(0)
+  incomeBreakdown  String?
+  expenseBreakdown String?
+  generatedBy      Int?
+  generatedAt      DateTime @default(now())
+  notes            String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  generatedByUser  User?    @relation("MarkazReportGeneratedBy", fields: [generatedBy], references: [id])
+  markaz           OrgUnit  @relation("MarkazReports", fields: [markazId], references: [id])
+
+  @@unique([markazId, month, year], name: "markazId_month_year")
+  @@map("markaz_reports")
+}

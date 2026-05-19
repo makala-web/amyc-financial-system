@@ -1,0 +1,619 @@
+// ============================================================
+// AMYC Financial Management System - Offline Database (Dexie.js)
+// ============================================================
+import Dexie, { type Table } from 'dexie';
+import { Capacitor } from '@capacitor/core';
+import type {
+  User,
+  OrgUnit,
+  Category,
+  Transaction,
+  ImportBatch,
+  Note,
+  AuditLog,
+  Budget,
+  BudgetItem,
+  PerformanceReport,
+  MonthlyBalanceRecord,
+  ConsolidatedReportRecord,
+  ReportArchiveRecord,
+} from './types';
+import { DEFAULT_INCOME_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES, DEPARTMENTS } from './types';
+
+class AmycDatabase extends Dexie {
+  users!: Table<User, number>;
+  orgUnits!: Table<OrgUnit, number>;
+  categories!: Table<Category, number>;
+  transactions!: Table<Transaction, number>;
+  importBatches!: Table<ImportBatch, number>;
+  notes!: Table<Note, number>;
+  monthlySubmissions!: Table<any, number>;
+  auditLogs!: Table<AuditLog, number>;
+  budgets!: Table<Budget, number>;
+  budgetItems!: Table<BudgetItem, number>;
+  performanceReports!: Table<PerformanceReport, number>;
+  monthlyBalances!: Table<MonthlyBalanceRecord, number>;
+  regionalReports!: Table<ConsolidatedReportRecord, number>;
+  markazReports!: Table<ConsolidatedReportRecord, number>;
+  reportArchives!: Table<ReportArchiveRecord, number>;
+
+  constructor() {
+    super('AMYC_FinancialSystem');
+
+    this.version(1).stores({
+      users: '++id, username, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+    });
+
+    // Version 2: Add email and security fields to users
+    this.version(2).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      auditLogs: '++id, action, entity, entityId, userId',
+    }).upgrade((tx) => {
+      // Add default email and security fields to existing users
+      return tx.table('users').toCollection().modify((user: any) => {
+        if (!user.email) {
+          user.email = user.username + '@amyc.local';
+        }
+        if (!user.securityQuestion) {
+          user.securityQuestion = 'Jina la mama yako ni nani?';
+        }
+        if (!user.securityAnswer) {
+          user.securityAnswer = 'default';
+        }
+      });
+    });
+
+    // Version 3: Migrate old roles to new role names
+    this.version(3).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      auditLogs: '++id, action, entity, entityId, userId',
+    }).upgrade((tx) => {
+      // Migrate old role names to new ones
+      const ROLE_MIGRATION: Record<string, string> = {
+        'accountant': 'treasurer',
+        'viewer': 'auditor',
+      };
+      return tx.table('users').toCollection().modify((user: any) => {
+        if (ROLE_MIGRATION[user.role]) {
+          user.role = ROLE_MIGRATION[user.role];
+        }
+      });
+    });
+
+    // Version 4: Add budgets and budgetItems tables
+    this.version(4).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+    });
+
+    // Version 5: Migrate old role names to new simplified roles
+    this.version(5).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+    }).upgrade((tx) => {
+      // Migrate old role names to new simplified roles
+      const ROLE_MIGRATION_V5: Record<string, string> = {
+        'accountant': 'mwekahazina',
+        'viewer': 'simple',
+        'treasurer': 'mwekahazina',
+        'secretary': 'katibu',
+        'director': 'mudir',
+        'auditor': 'muhasibu',
+      };
+      return tx.table('users').toCollection().modify((user: any) => {
+        if (ROLE_MIGRATION_V5[user.role]) {
+          user.role = ROLE_MIGRATION_V5[user.role];
+        }
+      });
+    });
+
+    // Version 6: Add performanceReports table
+    this.version(6).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+      performanceReports: '++id, orgUnitId, orgLevel, period, createdBy',
+    });
+
+    // Version 7: Offline-first balances and consolidated report snapshots
+    this.version(7).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+      performanceReports: '++id, orgUnitId, orgLevel, period, createdBy',
+      monthlyBalances: '++id, [orgUnitId+month+year], orgUnitId, month, year, reportType, generatedBy',
+      regionalReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+      markazReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+    });
+
+    // Version 8: Remove deprecated count fields from performanceReports
+    this.version(8).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+      performanceReports: '++id, orgUnitId, orgLevel, period, createdBy',
+      monthlyBalances: '++id, [orgUnitId+month+year], orgUnitId, month, year, reportType, generatedBy',
+      regionalReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+      markazReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+    }).upgrade((tx) => {
+      // Remove obsolete fields from existing performance report records
+      return tx.table('performanceReports').toCollection().modify((r: any) => {
+        if (r.memberCount !== undefined) delete r.memberCount;
+        if (r.branchCount !== undefined) delete r.branchCount;
+        if (r.mosqueCount !== undefined) delete r.mosqueCount;
+        if (r.schoolCount !== undefined) delete r.schoolCount;
+      });
+    });
+
+    // Version 9: Preserve replaced Excel/report versions for audit-safe corrections
+    this.version(9).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, sourceOrgId, targetOrgId, importType, status',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+      performanceReports: '++id, orgUnitId, orgLevel, period, createdBy',
+      monthlyBalances: '++id, [orgUnitId+month+year], orgUnitId, month, year, reportType, generatedBy',
+      regionalReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+      markazReports: '++id, [unitId+month+year], unitId, month, year, reportType, generatedBy',
+      reportArchives: '++id, entity, entityId, sourceOrgId, targetOrgId, month, year, archivedAt',
+    });
+
+    // Version 10: Compound indexes for offline report-scale period queries
+    this.version(10).stores({
+      users: '++id, username, email, role, orgLevel, orgUnitId, isActive',
+      orgUnits: '++id, name, type, parentId, code, isActive',
+      categories: '++id, name, type, isActive, orgLevel',
+      transactions: '++id, [orgUnitId+year+month], type, date, month, year, department, categoryId, orgUnitId, orgLevel, importBatchId',
+      importBatches: '++id, [sourceOrgId+periodYear+periodMonth], sourceOrgId, targetOrgId, importType, status, periodYear, periodMonth',
+      notes: '++id, title, type, orgUnitId, createdBy',
+      monthlySubmissions: '++id, orgUnitId, month, year, isSubmitted',
+      auditLogs: '++id, action, entity, entityId, userId',
+      budgets: '++id, name, year, status, orgUnitId, orgLevel, createdBy',
+      budgetItems: '++id, budgetId, type, categoryId, department, month',
+      performanceReports: '++id, orgUnitId, orgLevel, period, createdBy',
+      monthlyBalances: '++id, [orgUnitId+month+year], [orgUnitId+year+month], orgUnitId, month, year, reportType, generatedBy',
+      regionalReports: '++id, [unitId+month+year], [unitId+year+month], [reportType+year+month], unitId, month, year, reportType, generatedBy',
+      markazReports: '++id, [unitId+month+year], [unitId+year+month], [reportType+year+month], unitId, month, year, reportType, generatedBy',
+      reportArchives: '++id, entity, entityId, sourceOrgId, targetOrgId, month, year, archivedAt',
+    });
+  }
+}
+
+export const db = new AmycDatabase();
+
+// ============================================================
+// Database Initialization
+// ============================================================
+
+export async function initializeDatabase() {
+  // Check if already initialized
+  const userCount = await db.users.count();
+  if (userCount > 0) return;
+
+  // Create default Markaz Kuu
+  const markazId = await db.orgUnits.add({
+    name: 'Markaz Kuu',
+    type: 'markaz',
+    parentId: null,
+    code: 'MK',
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  // Create default admin user
+  await db.users.add({
+    username: 'admin',
+    email: 'admin@amyc.org',
+    password: await hashPassword('Admin@123'),
+    fullName: 'Msimamizi Mkuu',
+    role: 'admin',
+    orgLevel: 'markaz',
+    orgUnitId: markazId as number,
+    securityQuestion: 'Jina la mama yako ni nani?',
+    securityAnswer: await hashPassword('admin'),
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  // Create default income categories
+  for (const cat of DEFAULT_INCOME_CATEGORIES) {
+    await db.categories.add({
+      name: cat,
+      type: 'income',
+      isActive: true,
+      isDefault: true,
+      orgLevel: 'tawi', // available at all levels
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  // Create default expense categories
+  for (const cat of DEFAULT_EXPENSE_CATEGORIES) {
+    await db.categories.add({
+      name: cat,
+      type: 'expense',
+      isActive: true,
+      isDefault: true,
+      orgLevel: 'tawi',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+}
+
+// ============================================================
+// Password Hashing (simple hash for offline use)
+// ============================================================
+
+export async function hashPassword(password: string): Promise<string> {
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+  const encoder = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits']
+  );
+  const hashBuffer = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: saltBytes,
+      iterations: 210000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+  const salt = Array.from(saltBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return `pbkdf2$210000$${salt}$${hash}`;
+}
+
+export async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  if (hash.startsWith('pbkdf2$')) {
+    const [, iterationsRaw, saltHex, expectedHash] = hash.split('$');
+    const iterations = Number(iterationsRaw);
+    if (!Number.isFinite(iterations) || !saltHex || !expectedHash) return false;
+    const saltBytes = new Uint8Array(saltHex.match(/.{1,2}/g)?.map((byte) => parseInt(byte, 16)) || []);
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(password),
+      'PBKDF2',
+      false,
+      ['deriveBits']
+    );
+    const hashBuffer = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: saltBytes,
+        iterations,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      256
+    );
+    const actualHash = Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return actualHash === expectedHash;
+  }
+
+  // Legacy offline accounts used SHA-256 with a static salt; keep read compatibility.
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'AMYC_SALT_2024');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const legacyHash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return legacyHash === hash;
+}
+
+// ============================================================
+// Helper Queries
+// ============================================================
+
+export async function getTransactionsByOrg(orgUnitId: number, year?: number, month?: number) {
+  if (year && month) {
+    return db.transactions
+      .where('[orgUnitId+year+month]')
+      .equals([orgUnitId, year, month])
+      .toArray();
+  }
+
+  let query = db.transactions.where('orgUnitId').equals(orgUnitId);
+  if (year) {
+    const all = await query.toArray();
+    return all.filter(t => t.year === year && (month ? t.month === month : true));
+  }
+  return query.toArray();
+}
+
+export async function getTransactionsForOrgPeriod(
+  orgUnitId: number,
+  year: number,
+  month?: number
+) {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { queryNativeTransactionsForOrgPeriod } = await import('@/lib/storage/native-primary-queries');
+      const nativeRows = await queryNativeTransactionsForOrgPeriod(orgUnitId, year, month);
+      if (nativeRows.length > 0) return nativeRows;
+    } catch (error) {
+      console.warn('Native SQLite transaction query failed; falling back to Dexie.', error);
+    }
+  }
+
+  if (month && month > 0) {
+    return db.transactions
+      .where('[orgUnitId+year+month]')
+      .equals([orgUnitId, year, month])
+      .toArray();
+  }
+
+  return db.transactions
+    .where('[orgUnitId+year+month]')
+    .between([orgUnitId, year, Dexie.minKey], [orgUnitId, year, Dexie.maxKey])
+    .toArray();
+}
+
+export async function getReportsForUnitPeriod(
+  table: 'regionalReports' | 'markazReports',
+  unitId: number,
+  year: number,
+  month?: number
+) {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const { queryNativeReportsForUnitPeriod } = await import('@/lib/storage/native-primary-queries');
+      const nativeRows = await queryNativeReportsForUnitPeriod(table, unitId, year, month);
+      if (nativeRows.length > 0) return nativeRows;
+    } catch (error) {
+      console.warn('Native SQLite report query failed; falling back to Dexie.', error);
+    }
+  }
+
+  if (month && month > 0) {
+    return db[table]
+      .where('[unitId+year+month]')
+      .equals([unitId, year, month])
+      .toArray();
+  }
+
+  return db[table]
+    .where('[unitId+year+month]')
+    .between([unitId, year, Dexie.minKey], [unitId, year, Dexie.maxKey])
+    .toArray();
+}
+
+export async function getTransactionsByDepartment(orgUnitId: number, department: string, year?: number) {
+  const all = await db.transactions.where('orgUnitId').equals(orgUnitId).toArray();
+  return all.filter(t => t.department === department && (year ? t.year === year : true));
+}
+
+export async function getChildOrgUnits(parentId: number) {
+  return db.orgUnits.where('parentId').equals(parentId).toArray();
+}
+
+export async function getOrgUnitById(id: number) {
+  return db.orgUnits.get(id);
+}
+
+export async function getAllActiveOrgUnits(type?: 'tawi' | 'jimbo' | 'markaz') {
+  if (type) {
+    return db.orgUnits.where('type').equals(type).and(u => u.isActive).toArray();
+  }
+  return db.orgUnits.where('isActive').equals(1).toArray();
+}
+
+// Client-side audit log helper (offline)
+export async function logAudit(
+  action: string,
+  entity: string,
+  entityId: number,
+  userId: number,
+  details?: string | null
+) {
+  try {
+    await db.auditLogs.add({
+      action,
+      entity,
+      entityId,
+      userId,
+      details: details || null,
+      createdAt: new Date().toISOString(),
+    } as any);
+  } catch (err) {
+    // swallow errors - logging should not break UI
+    console.warn('Failed to write audit log (offline):', err);
+  }
+}
+
+export async function getCategories(type?: 'income' | 'expense') {
+  if (type) {
+    return db.categories.where('type').equals(type).and(c => c.isActive).toArray();
+  }
+  return db.categories.where('isActive').equals(1).toArray();
+}
+
+// Calculate monthly summary for an org unit
+export async function getMonthlySummary(orgUnitId: number, year: number) {
+  const transactions = await db.transactions
+    .where('orgUnitId')
+    .equals(orgUnitId)
+    .toArray();
+
+  const filtered = transactions.filter(t => t.year === year);
+
+  const incomeByMonth: number[] = new Array(12).fill(0);
+  const expenseByMonth: number[] = new Array(12).fill(0);
+
+  filtered.forEach(t => {
+    const monthIndex = t.month - 1;
+    if (t.type === 'income') {
+      incomeByMonth[monthIndex] += t.amount;
+    } else {
+      expenseByMonth[monthIndex] += t.amount;
+    }
+  });
+
+  return { incomeByMonth, expenseByMonth };
+}
+
+// Calculate departmental summary
+export async function getDepartmentalSummary(orgUnitId: number, year: number) {
+  const transactions = await db.transactions
+    .where('orgUnitId')
+    .equals(orgUnitId)
+    .toArray();
+
+  const filtered = transactions.filter(t => t.year === year);
+
+  const summary: Record<string, { income: number; expense: number }> = {};
+  for (const dept of DEPARTMENTS) {
+    summary[dept] = { income: 0, expense: 0 };
+  }
+
+  filtered.forEach(t => {
+    if (!summary[t.department]) {
+      summary[t.department] = { income: 0, expense: 0 };
+    }
+    if (t.type === 'income') {
+      summary[t.department].income += t.amount;
+    } else {
+      summary[t.department].expense += t.amount;
+    }
+  });
+
+  return summary;
+}
+
+// Find user by email
+export async function findUserByEmail(email: string): Promise<User | undefined> {
+  return db.users.where('email').equals(email.trim().toLowerCase()).first();
+}
+
+// ============================================================
+// Find or Create Org Unit (Offline-friendly: by name)
+// Used during registration when each level self-registers
+// ============================================================
+
+export async function findOrCreateOrgUnit(
+  name: string,
+  type: 'tawi' | 'jimbo' | 'markaz',
+  parentId: number | null,
+  codeHint?: string
+): Promise<OrgUnit> {
+  const trimmedName = name.trim();
+
+  // Try to find existing org unit with same name and type and parent
+  let existing: OrgUnit | undefined;
+
+  if (parentId !== null) {
+    // For child units (Jimbo under Markaz, Tawi under Jimbo), match by name + type + parent
+    const candidates = await db.orgUnits
+      .where('type')
+      .equals(type)
+      .and(u => u.name.toLowerCase() === trimmedName.toLowerCase() && u.parentId === parentId && u.isActive)
+      .toArray();
+    existing = candidates[0];
+  } else {
+    // For root units (Markaz), match by name + type + null parent
+    const candidates = await db.orgUnits
+      .where('type')
+      .equals(type)
+      .and(u => u.name.toLowerCase() === trimmedName.toLowerCase() && u.parentId === null && u.isActive)
+      .toArray();
+    existing = candidates[0];
+  }
+
+  if (existing) {
+    return existing;
+  }
+
+  // Create new org unit
+  const code = codeHint || generateCode(trimmedName, type);
+  const id = await db.orgUnits.add({
+    name: trimmedName,
+    type,
+    parentId,
+    code,
+    isActive: true,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+
+  return (await db.orgUnits.get(id)) as OrgUnit;
+}
+
+// Auto-generate a short code from the name
+function generateCode(name: string, type: string): string {
+  const prefix = type === 'markaz' ? 'MK' : type === 'jimbo' ? 'JM' : 'TW';
+  const short = name.replace(/\s+/g, '').substring(0, 3).toUpperCase();
+  const random = Math.floor(Math.random() * 900 + 100);
+  return `${prefix}-${short}${random}`;
+}

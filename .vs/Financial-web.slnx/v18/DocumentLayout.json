@@ -1,0 +1,222 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\HomePC\\Desktop\\Financial-web\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-real-device-hardening-pre-production-validation.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-dialog-show-categories-and-sources-properly.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\IncomeForm.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\transactions\\IncomeForm.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-make-category-optional-when-editing.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}|MarkdownSecurePreview"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\TransactionList.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\transactions\\TransactionList.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\ExpenseForm.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\transactions\\ExpenseForm.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\db-offline.ts||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\lib\\db-offline.ts||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\RegionalUnifiedReport.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\reports\\RegionalUnifiedReport.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\MarkazUnifiedReport.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\components\\reports\\MarkazUnifiedReport.tsx||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\reports\\unified-report-print.ts||{3B902123-F8A7-4915-9F01-361F908088D0}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:src\\lib\\reports\\unified-report-print.ts||{3B902123-F8A7-4915-9F01-361F908088D0}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "plan-real-device-hardening-pre-production-validation.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-real-device-hardening-pre-production-validation.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-real-device-hardening-pre-production-validation.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-real-device-hardening-pre-production-validation.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-real-device-hardening-pre-production-validation.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T16:35:32.168Z",
+              "EditorCaption": " [Preview]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "unified-report-print.ts",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\reports\\unified-report-print.ts",
+              "RelativeDocumentMoniker": "src\\lib\\reports\\unified-report-print.ts",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\reports\\unified-report-print.ts",
+              "RelativeToolTip": "src\\lib\\reports\\unified-report-print.ts",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwCkBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T16:32:27.301Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "RegionalUnifiedReport.tsx",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\RegionalUnifiedReport.tsx",
+              "RelativeDocumentMoniker": "src\\components\\reports\\RegionalUnifiedReport.tsx",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\RegionalUnifiedReport.tsx",
+              "RelativeToolTip": "src\\components\\reports\\RegionalUnifiedReport.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwC4CAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T16:26:36.047Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-add-balance-percentage-display-to-jimbo-and-markaz-reports.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T16:24:57.073Z",
+              "EditorCaption": " [Preview]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "MarkazUnifiedReport.tsx",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\MarkazUnifiedReport.tsx",
+              "RelativeDocumentMoniker": "src\\components\\reports\\MarkazUnifiedReport.tsx",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\reports\\MarkazUnifiedReport.tsx",
+              "RelativeToolTip": "src\\components\\reports\\MarkazUnifiedReport.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwCwCAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T16:27:28.701Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "db-offline.ts",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\db-offline.ts",
+              "RelativeDocumentMoniker": "src\\lib\\db-offline.ts",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\lib\\db-offline.ts",
+              "RelativeToolTip": "src\\lib\\db-offline.ts",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwOMBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T10:30:05.716Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "plan-fix-income-edit-dialog-show-categories-and-sources-properly.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-dialog-show-categories-and-sources-properly.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-fix-income-edit-dialog-show-categories-and-sources-properly.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-dialog-show-categories-and-sources-properly.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-fix-income-edit-dialog-show-categories-and-sources-properly.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T10:29:45.775Z",
+              "EditorCaption": " [Preview]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-fix-income-edit-form-category-and-source-dropdowns-data-loading.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T10:09:04.549Z",
+              "EditorCaption": " [Preview]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-fix-transaction-edit-show-all-transaction-data-and-categories-properly.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T09:52:49.726Z",
+              "EditorCaption": " [Preview]"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "TransactionList.tsx",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\TransactionList.tsx",
+              "RelativeDocumentMoniker": "src\\components\\transactions\\TransactionList.tsx",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\TransactionList.tsx",
+              "RelativeToolTip": "src\\components\\transactions\\TransactionList.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwIwCAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T09:35:19.927Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "IncomeForm.tsx",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\IncomeForm.tsx",
+              "RelativeDocumentMoniker": "src\\components\\transactions\\IncomeForm.tsx",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\IncomeForm.tsx",
+              "RelativeToolTip": "src\\components\\transactions\\IncomeForm.tsx",
+              "ViewState": "AgIAAGsBAAAAAAAAAAAAAGsBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T09:36:41.116Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "ExpenseForm.tsx",
+              "DocumentMoniker": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\ExpenseForm.tsx",
+              "RelativeDocumentMoniker": "src\\components\\transactions\\ExpenseForm.tsx",
+              "ToolTip": "C:\\Users\\HomePC\\Desktop\\Financial-web\\src\\components\\transactions\\ExpenseForm.tsx",
+              "RelativeToolTip": "src\\components\\transactions\\ExpenseForm.tsx",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAxwNYBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003213|",
+              "WhenOpened": "2026-05-18T09:36:01.167Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "plan-fix-transaction-edit-make-category-optional-when-editing.md [Preview]",
+              "DocumentMoniker": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-make-category-optional-when-editing.md",
+              "RelativeDocumentMoniker": "..\\..\\.copilot\\plans\\plan-fix-transaction-edit-make-category-optional-when-editing.md",
+              "ToolTip": "C:\\Users\\HomePC\\.copilot\\plans\\plan-fix-transaction-edit-make-category-optional-when-editing.md [Preview]",
+              "RelativeToolTip": "..\\..\\.copilot\\plans\\plan-fix-transaction-edit-make-category-optional-when-editing.md [Preview]",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-18T09:35:13.216Z",
+              "EditorCaption": " [Preview]"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

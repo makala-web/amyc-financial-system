@@ -1,0 +1,665 @@
+﻿'use client';
+
+import { useEffect, useState, useCallback } from 'react';
+import { db, getCategories } from '@/lib/db-offline';
+import { deleteTransaction, updateTransaction } from '@/lib/storage/transaction-store';
+import {
+  notifyTransactionsChanged,
+  queueTransactionDelete,
+  queueTransactionUpdate,
+  transactionSaveToast,
+} from '@/lib/transaction-sync';
+import { useAuthStore, useFinancialStore } from '@/lib/store';
+import { DEPARTMENTS, MONTHS } from '@/lib/types';
+import type { Transaction, Category } from '@/lib/types';
+
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { toast } from 'sonner';
+import {
+  Trash2, Pencil, Search, RefreshCw, ArrowUpDown,
+} from 'lucide-react';
+
+const PAGE_SIZE = 15;
+
+interface TransactionListProps {
+  initialType?: 'income' | 'expense';
+}
+
+export default function TransactionList({ initialType = 'income' }: TransactionListProps) {
+  const { currentOrg } = useAuthStore();
+  const { selectedYear } = useFinancialStore();
+
+  const [activeTab, setActiveTab] = useState<'income' | 'expense'>(initialType);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filtered, setFiltered] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters
+  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [filterDept, setFilterDept] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Pagination
+  const [page, setPage] = useState(1);
+
+  // Sorting
+  const [sortField, setSortField] = useState<'date' | 'amount'>('date');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [editingTxn, setEditingTxn] = useState<Transaction | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editForm, setEditForm] = useState({
+    date: '',
+    department: '',
+    categoryId: '',
+    amount: '',
+    description: '',
+    vendor: '',
+    item: '',
+    quantity: '',
+    unitPrice: '',
+    unit: '',
+    source: '',
+  });
+
+  const loadData = useCallback(async () => {
+    if (!currentOrg) return;
+    setLoading(true);
+    try {
+      const orgId = currentOrg.id!;
+      const allTxns = await db.transactions
+        .where('orgUnitId')
+        .equals(orgId)
+        .toArray();
+      const yearTxns = allTxns.filter(t => t.year === selectedYear);
+      setTransactions(yearTxns);
+
+      // Load categories
+      const cats = await getCategories();
+      setCategories(cats);
+    } catch (err) {
+      console.error('Error loading transactions:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentOrg, selectedYear]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => {
+    setActiveTab(initialType);
+    setFilterCategory('all');
+  }, [initialType]);
+
+  useEffect(() => {
+    setFilterCategory('all');
+  }, [activeTab]);
+
+  // Apply filters
+  useEffect(() => {
+    let result = transactions.filter(t => t.type === activeTab);
+
+    if (filterMonth !== 'all') {
+      result = result.filter(t => t.month === Number(filterMonth));
+    }
+    if (filterDept !== 'all') {
+      result = result.filter(t => t.department === filterDept);
+    }
+    if (filterCategory !== 'all') {
+      result = result.filter(t => t.categoryId === Number(filterCategory));
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(t =>
+        t.description?.toLowerCase().includes(q) ||
+        t.category_name?.toLowerCase().includes(q) ||
+        t.vendor?.toLowerCase().includes(q) ||
+        t.source?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      let cmp = 0;
+      if (sortField === 'date') {
+        cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+      } else {
+        cmp = a.amount - b.amount;
+      }
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+
+    setFiltered(result);
+    setPage(1);
+  }, [transactions, activeTab, filterMonth, filterDept, filterCategory, searchQuery, sortField, sortDir]);
+
+  // Delete transaction
+  const handleDelete = async (id: number) => {
+    try {
+      const txn = await db.transactions.get(id);
+      await deleteTransaction(id);
+      if (txn?.id) {
+        queueTransactionDelete({ id: txn.id, serverId: txn.serverId });
+        notifyTransactionsChanged({
+          orgUnitId: txn.orgUnitId,
+          orgLevel: txn.orgLevel,
+          type: txn.type,
+          year: txn.year,
+          month: txn.month,
+        });
+      }
+      toast.success(`Shughuli imefutwa! ${transactionSaveToast(navigator.onLine)}`);
+      loadData();
+    } catch (err) {
+      console.error('Error deleting transaction:', err);
+      toast.error('Imeshindwa kufuta. Jaribu tena.');
+    }
+  };
+
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('sw-TZ', { style: 'decimal', minimumFractionDigits: 0 }).format(val);
+
+  // Pagination
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  const toggleSort = (field: 'date' | 'amount') => {
+    if (sortField === field) {
+      setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDir('desc');
+    }
+  };
+
+  const activeCategories = categories.filter(c =>
+    c.type === activeTab && c.isActive
+  );
+
+  // Get categories for edit dialog - include all categories to ensure existing ones show up
+  const getEditDialogCategories = () => {
+    if (!editingTxn) return [];
+    return categories.filter(c => c.type === editingTxn.type);
+  };
+
+  const openEditDialog = (txn: Transaction) => {
+    const d = new Date(txn.date);
+    const dateValue = Number.isNaN(d.getTime()) ? '' : d.toISOString().slice(0, 10);
+    setEditingTxn(txn);
+    setEditForm({
+      date: dateValue,
+      department: txn.department || '',
+      categoryId: String(txn.categoryId || ''),
+      amount: String(txn.amount ?? ''),
+      description: txn.description || '',
+      vendor: txn.vendor || '',
+      item: txn.item || '',
+      quantity: txn.quantity != null ? String(txn.quantity) : '',
+      unitPrice: txn.unitPrice != null ? String(txn.unitPrice) : '',
+      unit: txn.unit || '',
+      source: txn.source || '',
+    });
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingTxn?.id) return;
+    if (!editForm.date || !editForm.department) {
+      toast.error('Jaza Tarehe na Idara kabla ya kuhifadhi.');
+      return;
+    }
+
+    const parsedDate = new Date(editForm.date);
+    if (Number.isNaN(parsedDate.getTime())) {
+      toast.error('Tarehe si sahihi.');
+      return;
+    }
+
+    // Allow optional category - if not selected, preserve the existing one
+    let selectedCategory = null;
+    let categoryIdToSave = editingTxn.categoryId;
+
+    if (editForm.categoryId) {
+      selectedCategory = categories.find((c) => c.id === Number(editForm.categoryId));
+      if (!selectedCategory) {
+        toast.error('Kundi ulilochagua halipo.');
+        return;
+      }
+      categoryIdToSave = Number(editForm.categoryId);
+    }
+
+    const parsedAmount = Number(editForm.amount || 0);
+    const parsedQuantity = Number(editForm.quantity || 0);
+    const parsedUnitPrice = Number(editForm.unitPrice || 0);
+    const finalAmount = parsedAmount;
+
+    if (finalAmount <= 0) {
+      toast.error('Kiasi lazima kiwe zaidi ya 0.');
+      return;
+    }
+
+    setSavingEdit(true);
+    try {
+      await updateTransaction(editingTxn.id, {
+        date: parsedDate.toISOString(),
+        month: parsedDate.getMonth() + 1,
+        year: parsedDate.getFullYear(),
+        department: editForm.department as any,
+        categoryId: categoryIdToSave,
+        category_name: selectedCategory?.name || editingTxn.category_name || '',
+        amount: finalAmount,
+        description: editForm.description || '',
+        source: editingTxn.type === 'income' ? (editForm.source || selectedCategory.name) : undefined,
+        item: editingTxn.type === 'expense' ? (editForm.item || '') : undefined,
+        vendor: editingTxn.type === 'expense' ? (editForm.vendor || '') : undefined,
+        quantity: editingTxn.type === 'expense' ? (parsedQuantity || undefined) : undefined,
+        unitPrice: editingTxn.type === 'expense' ? (parsedUnitPrice || undefined) : undefined,
+        unit: editingTxn.type === 'expense' ? (editForm.unit || '') : undefined,
+        updatedAt: new Date().toISOString(),
+      });
+      const updated = await db.transactions.get(editingTxn.id);
+      if (updated?.id) {
+        queueTransactionUpdate(updated as typeof updated & { id: number });
+        notifyTransactionsChanged({
+          orgUnitId: updated.orgUnitId,
+          orgLevel: updated.orgLevel,
+          type: updated.type,
+          year: updated.year,
+          month: updated.month,
+        });
+      }
+      toast.success(`Mabadiliko yamehifadhiwa. ${transactionSaveToast(navigator.onLine)}`);
+      setEditingTxn(null);
+      await loadData();
+    } catch (err) {
+      console.error('Error updating transaction:', err);
+      toast.error('Imeshindikana kuhifadhi mabadiliko.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <CardTitle className="text-xl text-emerald-700">Orodha ya Shughuli</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadData}
+            className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+          >
+            <RefreshCw className="size-4 mr-1" />
+            Refresh
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="p-3 sm:p-6">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'income' | 'expense')}>
+          <TabsList className="mb-4">
+            <TabsTrigger value="income" className="data-[state=active]:bg-green-100 data-[state=active]:text-green-700">
+              Mapato
+            </TabsTrigger>
+            <TabsTrigger value="expense" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700">
+              Matumizi
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Filters */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3 mb-4">
+            <Select value={filterMonth} onValueChange={setFilterMonth}>
+              <SelectTrigger className="border-emerald-200 min-h-[44px]">
+                <SelectValue placeholder="Mwezi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Miezi Yote</SelectItem>
+                {MONTHS.map((m, i) => (
+                  <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterDept} onValueChange={setFilterDept}>
+              <SelectTrigger className="border-emerald-200 min-h-[44px]">
+                <SelectValue placeholder="Idara" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Idara Zote</SelectItem>
+                {DEPARTMENTS.map(dept => (
+                  <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="border-emerald-200 min-h-[44px]">
+                <SelectValue placeholder="Kundi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Kundi Zote</SelectItem>
+                {activeCategories.map(cat => (
+                  <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <div className="relative col-span-2 sm:col-span-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+              <Input
+                placeholder="Tafuta..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 border-emerald-200 min-h-[44px]"
+              />
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto -mx-3 sm:mx-0">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead>
+                <tr className="border-b text-left text-muted-foreground">
+                  <th className="pb-2 font-medium">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 hover:text-foreground"
+                      onClick={() => toggleSort('date')}
+                    >
+                      Tarehe
+                      <ArrowUpDown className="size-3" />
+                    </button>
+                  </th>
+                  <th className="pb-2 font-medium">Aina</th>
+                  <th className="pb-2 font-medium">Idara</th>
+                  <th className="pb-2 font-medium">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 hover:text-foreground"
+                      onClick={() => toggleSort('amount')}
+                    >
+                      Kiasi
+                      <ArrowUpDown className="size-3" />
+                    </button>
+                  </th>
+                  <th className="pb-2 font-medium">Maelezo</th>
+                  <th className="pb-2 font-medium text-right">Vitendo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
+                      <td className="py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
+                      <td className="py-3"><div className="h-4 w-24 bg-muted animate-pulse rounded" /></td>
+                      <td className="py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
+                      <td className="py-3"><div className="h-4 w-32 bg-muted animate-pulse rounded" /></td>
+                      <td className="py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
+                    </tr>
+                  ))
+                ) : paged.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-muted-foreground">
+                      Hakuna shughuli zilizopatikana
+                    </td>
+                  </tr>
+                ) : (
+                  paged.map(txn => (
+                    <tr key={txn.id} className="border-b last:border-0 hover:bg-muted/50">
+                      <td className="py-2 whitespace-nowrap">
+                        {new Date(txn.date).toLocaleDateString('sw-TZ')}
+                      </td>
+                      <td className="py-2">
+                        <Badge
+                          variant="secondary"
+                          className={
+                            txn.type === 'income'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-orange-100 text-orange-700'
+                          }
+                        >
+                          {txn.category_name || 'N/A'}
+                        </Badge>
+                      </td>
+                      <td className="py-2 whitespace-nowrap">{txn.department}</td>
+                      <td className={`py-2 font-medium whitespace-nowrap ${
+                        txn.type === 'income' ? 'text-green-600' : 'text-orange-600'
+                      }`}>
+                        {txn.type === 'income' ? '+' : '-'}{formatCurrency(txn.amount)}
+                      </td>
+                      <td className="py-2 max-w-[200px] truncate text-muted-foreground">
+                        {txn.description || '-'}
+                      </td>
+                      <td className="py-2 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-emerald-600"
+                            onClick={() => openEditDialog(txn)}
+                          >
+                            <Pencil className="size-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground hover:text-red-600"
+                            onClick={() => handleDelete(txn.id!)}
+                          >
+                            <Trash2 className="size-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-4 pt-3 border-t gap-2">
+              <p className="text-sm text-muted-foreground">
+                Inaonyesha {(page - 1) * PAGE_SIZE + 1}-{Math.min(page * PAGE_SIZE, filtered.length)} kati ya {filtered.length}
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => p - 1)}
+                  className="border-emerald-200 min-h-[44px]"
+                >
+                  Awali
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  className="border-emerald-200 min-h-[44px]"
+                >
+                  Mbele
+                </Button>
+              </div>
+            </div>
+          )}
+        </Tabs>
+      </CardContent>
+
+      <Dialog open={!!editingTxn} onOpenChange={(open) => !open && setEditingTxn(null)}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              Hariri {editingTxn?.type === 'income' ? 'Mapato' : 'Matumizi'}
+            </DialogTitle>
+            <DialogDescription>
+              Taarifa zote za muamala zinaonekana hapa ili uchague kundi, idara, tarehe au kiwango sahihi.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid gap-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Tarehe</label>
+                <Input
+                  type="date"
+                  value={editForm.date}
+                  onChange={(e) => setEditForm((p) => ({ ...p, date: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Idara</label>
+                <Select
+                  value={editForm.department}
+                  onValueChange={(v) => setEditForm((p) => ({ ...p, department: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chagua idara" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map((dept) => (
+                      <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">Kundi</label>
+                <Select
+                  value={editForm.categoryId}
+                  onValueChange={(v) => setEditForm((p) => ({ ...p, categoryId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chagua kundi" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories
+                      .filter((c) => c.type === (editingTxn?.type || activeTab) && c.isActive)
+                      .map((cat) => (
+                        <SelectItem key={cat.id} value={String(cat.id)}>{cat.name}</SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">Kiasi</label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={editForm.amount}
+                  onChange={(e) => setEditForm((p) => ({ ...p, amount: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {editingTxn?.type === 'income' ? (
+              <div>
+                <label className="text-xs text-muted-foreground">Chanzo</label>
+                <Input
+                  value={editForm.source}
+                  onChange={(e) => setEditForm((p) => ({ ...p, source: e.target.value }))}
+                />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <label className="text-xs text-muted-foreground">Bidhaa/Huduma</label>
+                  <Input
+                    value={editForm.item}
+                    onChange={(e) => setEditForm((p) => ({ ...p, item: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Vendor</label>
+                  <Input
+                    value={editForm.vendor}
+                    onChange={(e) => setEditForm((p) => ({ ...p, vendor: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Kipimo</label>
+                  <Input
+                    value={editForm.unit}
+                    onChange={(e) => setEditForm((p) => ({ ...p, unit: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Idadi</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editForm.quantity}
+                    onChange={(e) => setEditForm((p) => {
+                      const nextQuantity = e.target.value;
+                      const computed = Number(nextQuantity || 0) * Number(p.unitPrice || 0);
+                      return {
+                        ...p,
+                        quantity: nextQuantity,
+                        amount: computed > 0 ? String(computed) : p.amount,
+                      };
+                    })}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Bei @</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editForm.unitPrice}
+                    onChange={(e) => setEditForm((p) => {
+                      const nextUnitPrice = e.target.value;
+                      const computed = Number(p.quantity || 0) * Number(nextUnitPrice || 0);
+                      return {
+                        ...p,
+                        unitPrice: nextUnitPrice,
+                        amount: computed > 0 ? String(computed) : p.amount,
+                      };
+                    })}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="text-xs text-muted-foreground">Maelezo</label>
+              <Input
+                value={editForm.description}
+                onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTxn(null)} disabled={savingEdit}>
+              Funga
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={savingEdit}>
+              {savingEdit ? 'Inahifadhi...' : 'Hifadhi Mabadiliko'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
