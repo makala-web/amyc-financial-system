@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Image from 'next/image';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -185,12 +185,9 @@ export default function ForgotPasswordForm({ onSwitchToLogin }: ForgotPasswordFo
       <CardHeader className="text-center pb-2 p-5 sm:p-7">
         {/* AMYC Logo */}
         <div className="mx-auto mb-3 w-12 h-12 sm:w-14 sm:h-14 relative bg-emerald-50 rounded-xl border border-emerald-100 p-1 shadow-sm">
-          <Image
-            src="/logo-amyc.png"
+          <AMYCLogo
             alt="AMYC Logo"
-            fill
-            className="object-contain"
-            priority
+            className="absolute inset-0 h-full w-full object-contain"
           />
         </div>
         <CardTitle className="text-2xl font-bold text-emerald-800">

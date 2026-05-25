@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import Image from 'next/image';
 import {
   SidebarProvider,
   SidebarInset,
@@ -25,6 +24,9 @@ import ExcelManager from '@/components/excel/ExcelManager';
 import NotesManager from '@/components/notes/NotesManager';
 import SettingsPage from '@/components/settings/SettingsPage';
 import PerformanceReportPage from '@/components/reports/PerformanceReportPage';
+import UserGuidePage from '@/components/guide/UserGuidePage';
+import { APP_VERSION } from '@/lib/app-version';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 
 const SECTION_MAP: Record<string, React.ComponentType> = {
   dashboard: Dashboard,
@@ -36,6 +38,7 @@ const SECTION_MAP: Record<string, React.ComponentType> = {
   organization: OrganizationManager,
   excel: ExcelManager,
   notes: NotesManager,
+  guide: UserGuidePage,
   settings: SettingsPage,
 };
 
@@ -43,6 +46,8 @@ export default function MainLayout() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const activeSection = useUIStore((s) => s.activeSection);
   const mainRef = useRef<HTMLElement>(null);
+  const lastHistorySection = useRef<string | null>(null);
+  const skipNextHistoryPush = useRef(false);
 
   // Initialize the database on mount
   useEffect(() => {
@@ -58,6 +63,44 @@ export default function MainLayout() {
       mainRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [activeSection]);
+
+  useEffect(() => {
+    if (!isAuthenticated || typeof window === 'undefined') return;
+
+    window.history.replaceState({ amycSection: activeSection }, '', window.location.href);
+    lastHistorySection.current = activeSection;
+
+    const onPopState = (event: PopStateEvent) => {
+      const section = event.state?.amycSection;
+      if (typeof section === 'string' && SECTION_MAP[section]) {
+        skipNextHistoryPush.current = true;
+        useUIStore.getState().setActiveSection(section);
+        return;
+      }
+
+      if (useUIStore.getState().activeSection !== 'dashboard') {
+        skipNextHistoryPush.current = true;
+        useUIStore.getState().setActiveSection('dashboard');
+        window.history.replaceState({ amycSection: 'dashboard' }, '', window.location.href);
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated || typeof window === 'undefined') return;
+    if (skipNextHistoryPush.current) {
+      skipNextHistoryPush.current = false;
+      lastHistorySection.current = activeSection;
+      return;
+    }
+    if (lastHistorySection.current === activeSection) return;
+
+    window.history.pushState({ amycSection: activeSection }, '', window.location.href);
+    lastHistorySection.current = activeSection;
+  }, [activeSection, isAuthenticated]);
 
   if (!isAuthenticated) {
     return null;
@@ -95,11 +138,9 @@ export default function MainLayout() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-1 text-[11px] text-muted-foreground">
             <div className="flex items-center gap-1.5">
               <div className="w-4 h-4 relative flex-shrink-0">
-                <Image
-                  src="/logo-amyc.png"
+                <AMYCLogo
                   alt="AMYC"
-                  fill
-                  className="object-contain"
+                  className="absolute inset-0 h-full w-full object-contain"
                 />
               </div>
               <p className="text-center sm:text-left">
@@ -107,7 +148,7 @@ export default function MainLayout() {
               </p>
             </div>
             <p className="text-emerald-700/60 font-medium">
-              Mfumo wa Fedha v2.1 &middot; Offline &middot; crafted by MakalaAweso
+              Mfumo wa Fedha v{APP_VERSION} &middot; Offline &middot; crafted by MakalaAweso
             </p>
           </div>
         </footer>

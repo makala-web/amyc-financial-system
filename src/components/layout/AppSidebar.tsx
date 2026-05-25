@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import {
   LayoutDashboard,
   TrendingUp,
@@ -13,6 +12,7 @@ import {
   LogOut,
   Calculator,
   ClipboardList,
+  BookOpen,
 } from 'lucide-react';
 import {
   Sidebar,
@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/sidebar';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 import { useAuthStore, useUIStore } from '@/lib/store';
 import type { OrgLevel } from '@/lib/types';
 
@@ -43,6 +44,7 @@ const NAV_ITEMS = [
   { id: 'organization', label: 'Muundo wa Taasisi', icon: Building2 },
   { id: 'excel', label: 'Excel', icon: FileSpreadsheet },
   { id: 'notes', label: 'Vikumbusho', icon: StickyNote },
+  { id: 'guide', label: 'Muongozo', icon: BookOpen },
   { id: 'settings', label: 'Mipangilio', icon: Settings },
 ] as const;
 
@@ -135,12 +137,9 @@ export default function AppSidebar() {
       <SidebarHeader className="p-3 bg-gradient-to-r from-emerald-700 to-emerald-600">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 relative flex-shrink-0 bg-white rounded-xl p-1 shadow-sm">
-            <Image
-              src="/logo-amyc.png"
+            <AMYCLogo
               alt="AMYC Logo"
-              fill
-              className="object-contain"
-              priority
+              className="absolute inset-0 h-full w-full object-contain"
             />
           </div>
           <div className="flex flex-col">

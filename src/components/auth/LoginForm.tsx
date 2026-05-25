@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,9 +34,25 @@ export default function LoginForm({ onSwitchToRegister, onSwitchToForgotPassword
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [offlineMode, setOfflineMode] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
 
   const login = useAuthStore((state) => state.login);
   const setAuthToken = useAuthStore((state) => state.setAuthToken);
+
+  useEffect(() => {
+    setIsMounted(true);
+    const updateOnlineStatus = () => setIsOnline(navigator.onLine);
+
+    updateOnlineStatus();
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+
+    return () => {
+      window.removeEventListener('online', updateOnlineStatus);
+      window.removeEventListener('offline', updateOnlineStatus);
+    };
+  }, []);
 
   const completeOfflineLogin = async () => {
     const result = await loginOffline(email, password);
@@ -125,12 +141,9 @@ export default function LoginForm({ onSwitchToRegister, onSwitchToForgotPassword
 
       <CardHeader className="text-center pb-2 p-5 sm:p-7">
         <div className="mx-auto mb-4 w-14 h-14 sm:w-16 sm:h-16 relative bg-emerald-50 rounded-xl border border-emerald-100 p-1.5 shadow-sm">
-          <Image
-            src="/logo-amyc.png"
+          <AMYCLogo
             alt="AMYC Logo"
-            fill
-            className="object-contain"
-            priority
+            className="absolute inset-0 h-full w-full object-contain"
           />
         </div>
         <CardTitle className="text-xl sm:text-2xl font-bold text-emerald-800">
@@ -139,7 +152,7 @@ export default function LoginForm({ onSwitchToRegister, onSwitchToForgotPassword
         <CardDescription className="text-muted-foreground text-sm mt-1">
           Weka taarifa zako ili kupata mfumo
         </CardDescription>
-        {typeof navigator !== 'undefined' && !navigator.onLine && (
+        {isMounted && !isOnline && (
           <p className="mt-2 text-xs text-amber-700 flex items-center justify-center gap-1">
             <WifiOff className="h-3.5 w-3.5" />
             Nje ya mtandao — utatumia akaunti iliyohifadhiwa kwenye kifaa

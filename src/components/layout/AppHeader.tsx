@@ -1,7 +1,6 @@
 'use client';
 
-import Image from 'next/image';
-import { LogOut } from 'lucide-react';
+import { ChevronLeft, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -20,6 +19,7 @@ import {
 } from '@/components/ui/select';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 import { useAuthStore, useFinancialStore, useUIStore } from '@/lib/store';
 import SyncIndicator from '@/components/pwa/SyncIndicator';
 import type { OrgLevel } from '@/lib/types';
@@ -59,6 +59,7 @@ export default function AppHeader() {
   const selectedYear = useFinancialStore((s) => s.selectedYear);
   const setSelectedYear = useFinancialStore((s) => s.setSelectedYear);
   const activeSection = useUIStore((s) => s.activeSection);
+  const goBackSection = useUIStore((s) => s.goBackSection);
 
   const activeSectionLabel = SECTION_LABELS[activeSection] || activeSection;
 
@@ -74,20 +75,37 @@ export default function AppHeader() {
   // Generate year options (2026 to 2040)
   const years = Array.from({ length: 15 }, (_, i) => 2026 + i);
 
+  const handleBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    goBackSection();
+  };
+
   return (
     <header className="sticky top-0 z-30 flex h-14 sm:h-16 items-center gap-2 sm:gap-3 border-b border-emerald-100 bg-white/95 backdrop-blur-sm px-2 sm:px-4 shadow-sm" style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingLeft: 'max(0.5rem, env(safe-area-inset-left, 0px))', paddingRight: 'max(0.5rem, env(safe-area-inset-right, 0px))' }}>
       {/* Mobile menu toggle - 44px touch target */}
       <SidebarTrigger className="text-emerald-700 hover:bg-emerald-50 min-h-[44px] min-w-[44px] flex items-center justify-center" />
 
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="text-emerald-700 hover:bg-emerald-50 min-h-[44px] min-w-[44px]"
+        onClick={handleBack}
+        disabled={activeSection === 'dashboard'}
+        title="Rudi nyuma"
+      >
+        <ChevronLeft className="h-5 w-5" />
+      </Button>
+
       {/* AMYC Logo - visible in header */}
       <div className="flex items-center gap-2 sm:gap-2.5 mr-0 sm:mr-1">
         <div className="w-8 h-8 sm:w-9 sm:h-9 relative flex-shrink-0 bg-emerald-50 rounded-lg p-0.5">
-          <Image
-            src="/logo-amyc.png"
+          <AMYCLogo
             alt="AMYC"
-            fill
-            className="object-contain"
-            priority
+            className="absolute inset-0 h-full w-full object-contain"
           />
         </div>
         <div className="hidden sm:flex flex-col leading-tight">

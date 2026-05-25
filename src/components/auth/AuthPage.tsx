@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
+import AMYCLogo from '@/components/brand/AMYCLogo';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ForgotPasswordForm from './ForgotPasswordForm';
@@ -29,12 +29,9 @@ export default function AuthPage() {
       {/* Logo and Branding */}
       <div className="relative z-10 flex flex-col items-center mb-6 sm:mb-8">
         <div className="w-20 h-20 sm:w-24 sm:h-24 relative mb-3 sm:mb-4 bg-white rounded-2xl shadow-lg p-2 border border-emerald-100">
-          <Image
-            src="/logo-amyc.png"
+          <AMYCLogo
             alt="AMYC Logo"
-            fill
-            className="object-contain"
-            priority
+            className="absolute inset-0 h-full w-full object-contain"
           />
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold text-emerald-800 tracking-tight">
