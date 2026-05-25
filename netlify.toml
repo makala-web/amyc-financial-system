@@ -11,3 +11,9 @@
   for = "/manifest.json"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/downloads/*.apk"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/vnd.android.package-archive"

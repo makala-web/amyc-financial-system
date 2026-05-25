@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import RegisterSW from "@/components/pwa/RegisterSW";
 import InstallPrompt from "@/components/pwa/InstallPrompt";
+import AndroidApkDownload from "@/components/pwa/AndroidApkDownload";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -77,6 +78,7 @@ export default function RootLayout({
         <Toaster />
         <RegisterSW />
         <InstallPrompt />
+        <AndroidApkDownload />
       </body>
     </html>
   );
