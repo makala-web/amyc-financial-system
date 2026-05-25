@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { db, getChildOrgUnits, getMonthlySummary, getDepartmentalSummary } from '@/lib/db-offline';
+import { getChildOrgUnits, getMonthlySummary, getDepartmentalSummary, getReportsForUnitPeriod } from '@/lib/db-offline';
 import { MONTHS_SHORT, DEPARTMENTS } from '@/lib/types';
 import type { OrgLevel, OrgUnit } from '@/lib/types';
 import type { BranchReportSnapshot } from '@/lib/exporters/branch-export';
@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, Printer, RefreshCw, Building2, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { saveWorkbookFile } from '@/lib/export-workbook';
 import {
   pctExpenseOfIncome,
   pctSalioRemaining,
@@ -134,7 +135,7 @@ async function buildChildFromBranchSnapshots(
   branch: OrgUnit,
   year: number
 ): Promise<ChildData | null> {
-  const records = await db.regionalReports.where('unitId').equals(regionId).toArray();
+  const records = await getReportsForUnitPeriod('regionalReports', regionId, year);
   const yearRecords = records.filter((record) => record.reportType === 'regional' && record.year === year);
   const snapshots: Array<{ snapshot: BranchReportSnapshot; recordMonth: number }> = [];
 
@@ -197,7 +198,7 @@ async function buildChildFromBranchSnapshots(
 }
 
 async function buildChildFromRegionalReportSnapshot(region: OrgUnit, year: number): Promise<ChildData | null> {
-  const rows = await db.regionalReports.where('unitId').equals(region.id!).toArray();
+  const rows = await getReportsForUnitPeriod('regionalReports', region.id!, year);
   const parsedRows = rows
     .filter((r) => r.year === year && r.reportType === 'consolidated_master')
     .map((r) => {
@@ -300,7 +301,7 @@ export default function ConsolidationReport({
 
   useEffect(() => {
     loadData();
-  }, [orgUnitId, year, selectedChildIds]);
+  }, [orgUnitId, year, selectedChildIds, monthMode, month]);
 
   const loadData = async () => {
     setLoading(true);
@@ -783,7 +784,7 @@ export default function ConsolidationReport({
   };
 
   // ── Export to Excel ────────────────────────────────────
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const wsData: (string | number)[][] = [
       ['ANSAAR MUSLIM YOUTH CENTRE'],
       [header],
@@ -917,7 +918,7 @@ export default function ConsolidationReport({
         ? 'Ki-Idara Muunganiko'
         : 'Muunganiko Kamili';
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, `${sheetName}_${orgName}_${year}.xlsx`);
+    await saveWorkbookFile(wb, `${sheetName}_${orgName}_${year}.xlsx`);
   };
 
   if (loading) {
@@ -1414,11 +1415,6 @@ export default function ConsolidationReport({
         <p className="font-semibold text-emerald-900">{header}</p>
         <p className="font-semibold text-emerald-800">{title}</p>
         <p className="text-xs text-muted-foreground">Imetolewa: {generatedAt}</p>
-        <div className="pt-1">
-          <Badge variant="outline" className="text-xs">
-            Source: Uploaded snapshots first, Local transactions fallback
-          </Badge>
-        </div>
         {isMarkaz && markazOwnData && (
           <p className="text-xs text-muted-foreground mt-1">
             Muunganiko unajumuisha data ya Markaz yenyewe pamoja na Majimbo yaliyochaguliwa
@@ -1455,27 +1451,6 @@ export default function ConsolidationReport({
           <Download className="h-4 w-4 mr-1" />
           Hamisha Excel
         </Button>
-      </div>
-
-      {/* Signature area */}
-      <div className="flex justify-between gap-8 mt-4 pt-6 border-t border-emerald-200">
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mudir: {currentOrg?.mudirName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mudirSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mwekahazina: {currentOrg?.mwekahazinaName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mwekahazinaSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700">
-            Tarehe: _________________________
-          </div>
-        </div>
       </div>
 
       {/* Table */}

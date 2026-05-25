@@ -26,6 +26,7 @@ export type UnifiedPrintCategoryRow = {
 
 export type UnifiedPrintBranchRow = {
   name: string;
+  status?: string;
   openingBalance: number;
   income: number;
   expense: number;
@@ -49,6 +50,10 @@ export type UnifiedPrintConfig = {
   expenseCategoryRows: UnifiedPrintCategoryRow[];
   branchRows?: UnifiedPrintBranchRow[];
   branchSectionTitle?: string;
+  mudirName?: string;
+  mudirSignature?: string;
+  mwekahazinaName?: string;
+  mwekahazinaSignature?: string;
 };
 
 function formatNum(value: number) {
@@ -71,17 +76,45 @@ function escapeHtml(value: string) {
     .replaceAll("'", '&#39;');
 }
 
+function signatureValue(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? escapeHtml(trimmed) : '_________________________';
+}
+
+function normalizeCategoryRows(rows: UnifiedPrintCategoryRow[], total: number) {
+  const merged = new Map<string, { label: string; amount: number }>();
+
+  for (const row of rows) {
+    const label = (row.category || 'Bila Kategoria').trim() || 'Bila Kategoria';
+    const key = label.toLocaleLowerCase('sw').replace(/\s+/g, ' ');
+    const current = merged.get(key);
+    if (current) {
+      current.amount += row.amount || 0;
+    } else {
+      merged.set(key, { label, amount: row.amount || 0 });
+    }
+  }
+
+  return Array.from(merged.values())
+    .map((row) => ({
+      category: row.label,
+      amount: row.amount,
+      percentage: total > 0 ? (row.amount / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount || a.category.localeCompare(b.category, 'sw'));
+}
+
 const PRINT_STYLES = `
-  @page { size: A4 landscape; margin: 14mm 12mm 18mm; }
+  @page { size: A4 landscape; margin: 18mm 12mm 18mm; }
   * { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; color: #0f172a; margin: 0; padding: 0; background: #e5e7eb; }
-  .wrapper { width: 100%; max-width: 1120px; min-height: 100vh; margin: 0 auto; padding: 18px 18px 28px; box-sizing: border-box; background: #fff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12); }
+  .wrapper { width: 100%; max-width: 1120px; min-height: 100vh; margin: 0 auto; padding: 18px 18px 28px; box-sizing: border-box; background: #fff; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12); overflow-x: auto; }
   .header { text-align: center; margin-bottom: 16px; page-break-inside: avoid; break-inside: avoid; }
   .h1 { font-weight: 800; font-size: 18px; color: #065f46; margin-bottom: 4px; }
   .h2 { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
   .h3 { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
   .meta { font-size: 11px; color: #334155; margin-top: 4px; }
-  .box { border: 1px solid #cbd5e1; border-radius: 8px; margin: 14px 0; padding: 8px; }
+  .box { border: 1px solid #cbd5e1; border-radius: 8px; margin: 16px 0; padding: 8px; }
   .box-title { background: #ecfdf5; color: #065f46; font-weight: 700; padding: 10px 12px; border-radius: 6px; margin-bottom: 8px; page-break-after: avoid; break-after: avoid; }
   table { width: 100%; border-collapse: collapse; font-size: 11px; table-layout: fixed; page-break-inside: auto; break-inside: auto; }
   thead { display: table-header-group; }
@@ -92,7 +125,8 @@ const PRINT_STYLES = `
   th { background: #f0fdf4; text-align: left; }
   td.num, th.num { text-align: right; }
   .empty-row { text-align: center; color: #475569; padding: 12px 0; }
-  .section { page-break-inside: auto; break-inside: auto; }
+  .section { page-break-inside: auto; break-inside: auto; scroll-margin-top: 72px; }
+  .section + .section { margin-top: 18px; }
   .report-footer {
     margin-top: 14px;
     padding-top: 6px;
@@ -104,6 +138,30 @@ const PRINT_STYLES = `
     align-items: center;
     page-break-inside: avoid;
     break-inside: avoid;
+  }
+  .signature-area {
+    display: none;
+    gap: 40px;
+    justify-content: space-between;
+    margin-top: 24px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  body.pdf-export .signature-area { display: flex; }
+  body.pdf-export .no-print,
+  body.pdf-export .print-actions { display: none !important; }
+  .signature-box { flex: 1; text-align: center; }
+  .signature-line {
+    border-top: 1px solid #000;
+    color: #334155;
+    font-size: 11px;
+    margin-top: 46px;
+    padding-top: 6px;
+  }
+  .signature-subline {
+    color: #334155;
+    font-size: 11px;
+    margin-top: 8px;
   }
   .page-counter::after { content: "Ukurasa " counter(page); font-weight: 600; }
   .print-actions {
@@ -131,6 +189,8 @@ const PRINT_STYLES = `
     .no-print { display: none !important; }
     .wrapper { max-width: none; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
     .box { page-break-inside: auto; break-inside: auto; }
+    .section { page-break-inside: auto; break-inside: auto; margin-top: 12px; }
+    .section:first-of-type { margin-top: 0; }
     .header, .box-title { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .report-footer {
       position: static;
@@ -138,13 +198,17 @@ const PRINT_STYLES = `
       padding: 8px 0 0;
       background: #fff;
     }
+    .signature-area { display: flex; }
     thead { display: table-header-group; }
-    tfoot { display: table-footer-group; }
+    tfoot { display: table-row-group; }
     tr { page-break-inside: avoid; break-inside: avoid; }
   }
 `;
 
 export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): string {
+  const incomeCategoryRows = normalizeCategoryRows(config.incomeCategoryRows, config.totalIncome);
+  const expenseCategoryRows = normalizeCategoryRows(config.expenseCategoryRows, config.totalExpense);
+
   const monthlyRowsHtml =
     config.monthlyRows.length > 0
       ? config.monthlyRows
@@ -176,13 +240,16 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
 
   const branchSectionHtml =
     config.branchRows && config.branchRows.length > 0
-      ? `
+      ? (() => {
+        const hasStatus = config.branchRows?.some((row) => row.status);
+        return `
         <div class="box section">
           <div class="box-title">${escapeHtml(config.branchSectionTitle || 'Muhtasari wa Kila Tawi')}</div>
           <table>
             <thead>
             <tr>
-              <th>Tawi</th>
+              <th>Kitengo</th>
+              ${hasStatus ? '<th>Hali</th>' : ''}
               <th class="num">Salio la mwanzo</th>
               <th class="num">Mapato</th>
               <th class="num">Matumizi</th>
@@ -195,6 +262,7 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
                 (row) => `
             <tr>
               <td>${escapeHtml(row.name)}</td>
+              ${hasStatus ? `<td>${escapeHtml(row.status || '')}</td>` : ''}
               <td class="num">${formatNum(row.openingBalance)}</td>
               <td class="num">${formatNum(row.income)}</td>
               <td class="num">${formatNum(row.expense)}</td>
@@ -204,12 +272,13 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
               .join('')}
             </tbody>
           </table>
-        </div>`
+        </div>`;
+      })()
       : '';
 
   const incomeCategoryRowsHtml =
-    config.incomeCategoryRows.length > 0
-      ? config.incomeCategoryRows
+    incomeCategoryRows.length > 0
+      ? incomeCategoryRows
           .map(
             (row) => `
       <tr>
@@ -222,8 +291,8 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
       : `<tr><td colspan="3" class="empty-row">Hakuna taarifa za mapato kwa kategoria.</td></tr>`;
 
   const expenseCategoryRowsHtml =
-    config.expenseCategoryRows.length > 0
-      ? config.expenseCategoryRows
+    expenseCategoryRows.length > 0
+      ? expenseCategoryRows
           .map(
             (row) => `
       <tr>
@@ -247,9 +316,9 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
     </head>
     <body>
       <div class="print-actions no-print">
-        <button class="btn-back" onclick="window.close()">&#8592; Rudi kwenye Ripoti</button>
+        <button class="btn-back" onclick="if (window.opener) window.close(); else if (history.length > 1) history.back(); else location.href='/'">&#8592; Rudi kwenye Ripoti</button>
         <button class="btn-print" onclick="window.print()">&#128424; Chapa A4</button>
-        <button class="btn-close" onclick="window.close()">&#10005; Cancel Print</button>
+        <button class="btn-close" onclick="if (window.opener) window.close(); else if (history.length > 1) history.back(); else location.href='/'">&#10005; Cancel Print</button>
       </div>
       <div class="wrapper">
         <div class="header">
@@ -342,6 +411,20 @@ export function buildUnifiedFinancialPrintHtml(config: UnifiedPrintConfig): stri
             ${expenseCategoryRowsHtml}
             </tbody>
           </table>
+        </div>
+
+        <div class="signature-area">
+          <div class="signature-box">
+            <div class="signature-line">Mudir: ${signatureValue(config.mudirName)}</div>
+            <div class="signature-subline">Sahihi: ${signatureValue(config.mudirSignature)}</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">Mwekahazina: ${signatureValue(config.mwekahazinaName)}</div>
+            <div class="signature-subline">Sahihi: ${signatureValue(config.mwekahazinaSignature)}</div>
+          </div>
+          <div class="signature-box">
+            <div class="signature-line">Tarehe: _________________________</div>
+          </div>
         </div>
 
         <div class="report-footer">

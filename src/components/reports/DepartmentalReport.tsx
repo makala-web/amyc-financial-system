@@ -22,6 +22,7 @@ import {
 } from '@/lib/print-report';
 import { useAuthStore } from '@/lib/store';
 import * as XLSX from 'xlsx';
+import { saveWorkbookFile } from '@/lib/export-workbook';
 import {
   pctExpenseOfIncome,
   pctSalioRemaining,
@@ -272,7 +273,7 @@ export default function DepartmentalReport({
   };
 
   // ── Export to Excel ────────────────────────────────────
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const wsData: (string | number)[][] = [
       ['ANSAAR MUSLIM YOUTH CENTRE'],
       [`OFISI YA MUDIR - ${ORG_LABELS[orgLevel]} ${orgName.toUpperCase()}`],
@@ -364,7 +365,7 @@ export default function DepartmentalReport({
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ki-Idara Mwaka');
-    XLSX.writeFile(wb, `Ki-Idara_Mwaka_${orgName}_${year}.xlsx`);
+    await saveWorkbookFile(wb, `Ki-Idara_Mwaka_${orgName}_${year}.xlsx`);
   };
 
   if (loading) {
@@ -421,27 +422,6 @@ export default function DepartmentalReport({
           <Download className="h-4 w-4 mr-1" />
           Hamisha Excel
         </Button>
-      </div>
-
-      {/* Signature area */}
-      <div className="flex justify-between gap-8 mt-4 pt-6 border-t border-emerald-200">
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mudir: {currentOrg?.mudirName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mudirSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mwekahazina: {currentOrg?.mwekahazinaName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mwekahazinaSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700">
-            Tarehe: _________________________
-          </div>
-        </div>
       </div>
 
       {/* Table */}

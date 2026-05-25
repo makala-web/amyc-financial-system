@@ -6,6 +6,9 @@
  * Opens a new window with A4-formatted report content,
  * triggers the browser's print dialog (which allows Save as PDF).
  */
+import { isNativeApp } from '@/lib/native-files';
+import { registerPlugin } from '@capacitor/core';
+import { toast } from 'sonner';
 
 export interface PrintReportOptions {
   title: string;
@@ -28,6 +31,44 @@ const MONTH_NAMES = [
   'Januari', 'Februari', 'Machi', 'Aprili', 'Mei', 'Juni',
   'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba',
 ];
+
+const NativePrint = registerPlugin<{ printHtml(options: { html: string; jobName?: string }): Promise<{ started: boolean }> }>('NativePrint');
+const NativePdf = registerPlugin<{
+  saveHtmlAsPdf(options: {
+    html: string;
+    fileName: string;
+    orientation?: 'portrait' | 'landscape';
+  }): Promise<{ success: boolean; fileName: string; uri?: string; savedToDownloads?: boolean }>;
+}>('NativePdf');
+
+function waitForRender(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const slice = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...slice);
+  }
+  return btoa(binary);
+}
+
+function escapeHtml(value: string | number | null | undefined): string {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function signatureValue(value: string | null | undefined): string {
+  const trimmed = value?.trim();
+  return trimmed ? escapeHtml(trimmed) : '_________________________';
+}
 
 /**
  * Generate the full HTML for a report (shared by print and download).
@@ -60,11 +101,11 @@ export function generateReportHTML(options: PrintReportOptions): string {
 <html lang="sw">
 <head>
   <meta charset="UTF-8" />
-  <title>${title} - ${orgInfo}</title>
+  <title>${escapeHtml(title)} - ${escapeHtml(orgInfo)}</title>
   <style>
     @page {
       size: ${pageSize};
-      margin: 14mm 15mm 18mm;
+      margin: 18mm 15mm 18mm;
     }
 
     * {
@@ -81,12 +122,21 @@ export function generateReportHTML(options: PrintReportOptions): string {
       line-height: 1.4;
     }
 
+    h2,
     h3 {
       color: #166534;
-      font-size: 11pt;
-      margin: 14px 0 6px;
       page-break-after: avoid;
       break-after: avoid;
+    }
+
+    h2 {
+      font-size: 12pt;
+      margin: 16px 0 7px;
+    }
+
+    h3 {
+      font-size: 11pt;
+      margin: 14px 0 6px;
     }
 
     .report-shell {
@@ -98,6 +148,7 @@ export function generateReportHTML(options: PrintReportOptions): string {
       box-sizing: border-box;
       background: #fff;
       box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+      overflow-x: auto;
     }
 
     .report-header {
@@ -244,12 +295,23 @@ export function generateReportHTML(options: PrintReportOptions): string {
       break-after: avoid;
     }
 
+    .report-content > h2,
+    .report-content > h3 {
+      margin-top: 16px;
+    }
+
     .summary-card,
     .summary-grid,
     .signature-area,
     .report-footer {
       page-break-inside: avoid;
       break-inside: avoid;
+    }
+
+    .report-content table + h2,
+    .report-content table + h3,
+    .report-content table + p {
+      margin-top: 14px;
     }
 
     /* Footer */
@@ -275,11 +337,20 @@ export function generateReportHTML(options: PrintReportOptions): string {
     /* Signature area */
     .signature-area {
       margin-top: 24px;
-      display: flex;
+      display: none;
       justify-content: space-between;
       gap: 40px;
       page-break-inside: avoid;
       break-inside: avoid;
+    }
+
+    body.pdf-export .signature-area {
+      display: flex;
+    }
+
+    body.pdf-export .no-print,
+    body.pdf-export .print-actions {
+      display: none !important;
     }
 
     .signature-box {
@@ -328,11 +399,20 @@ export function generateReportHTML(options: PrintReportOptions): string {
         padding: 0;
         box-shadow: none;
       }
+      .report-content > h2,
+      .report-content > h3,
+      .box-title,
+      .section-title {
+        padding-top: 3mm;
+      }
       .report-footer {
         position: static;
         margin: 0;
         padding: 8px 0 0;
         background: #fff;
+      }
+      .signature-area {
+        display: flex;
       }
       table {
         page-break-inside: auto;
@@ -342,7 +422,7 @@ export function generateReportHTML(options: PrintReportOptions): string {
         display: table-header-group;
       }
       tfoot {
-        display: table-footer-group;
+        display: table-row-group;
       }
       tr {
         page-break-inside: avoid;
@@ -399,13 +479,13 @@ export function generateReportHTML(options: PrintReportOptions): string {
 <body>
   <!-- Print/PDF + Close buttons (hidden when actually printing) -->
   <div class="print-actions no-print">
-    <button class="btn-back" onclick="window.close()">
+    <button class="btn-back" onclick="if (window.opener) window.close(); else if (history.length > 1) history.back(); else location.href='/'">
       &#8592; Rudi kwenye Ripoti
     </button>
     <button class="btn-print" onclick="window.print()">
       &#128424; Chapa A4
     </button>
-    <button class="btn-close" onclick="window.close()">
+    <button class="btn-close" onclick="if (window.opener) window.close(); else if (history.length > 1) history.back(); else location.href='/'">
       &#10005; Cancel Print
     </button>
   </div>
@@ -414,10 +494,10 @@ export function generateReportHTML(options: PrintReportOptions): string {
     <!-- Report Header -->
     <div class="report-header">
       <h1>ANSAAR MUSLIM YOUTH CENTRE</h1>
-      <h2>${orgInfo}</h2>
-      <h3>${title}</h3>
-      <p class="period">${subtitle} &mdash; ${periodText}</p>
-      <p style="font-size:8pt;color:#64748b;margin-top:4px;">Ripoti imetolewa: ${new Date().toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+      <h2>${escapeHtml(orgInfo)}</h2>
+      <h3>${escapeHtml(title)}</h3>
+      <p class="period">${escapeHtml(subtitle)} &mdash; ${escapeHtml(periodText)}</p>
+      <p style="font-size:8pt;color:#64748b;margin-top:4px;">Ripoti imetolewa: ${escapeHtml(new Date().toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</p>
     </div>
 
     <!-- Report Content -->
@@ -429,12 +509,12 @@ export function generateReportHTML(options: PrintReportOptions): string {
   <!-- Signature Area -->
   <div class="signature-area">
     <div class="signature-box">
-      <div class="line">Mudir: ${mudirName || '_________________________'}</div>
-      <div class="subline">Sahihi: ${mudirSignature || '_________________________'}</div>
+      <div class="line">Mudir: ${signatureValue(mudirName)}</div>
+      <div class="subline">Sahihi: ${signatureValue(mudirSignature)}</div>
     </div>
     <div class="signature-box">
-      <div class="line">Mwekahazina: ${mwekahazinaName || '_________________________'}</div>
-      <div class="subline">Sahihi: ${mwekahazinaSignature || '_________________________'}</div>
+      <div class="line">Mwekahazina: ${signatureValue(mwekahazinaName)}</div>
+      <div class="subline">Sahihi: ${signatureValue(mwekahazinaSignature)}</div>
     </div>
     <div class="signature-box">
       <div class="line">Tarehe: _________________________</div>
@@ -444,7 +524,7 @@ export function generateReportHTML(options: PrintReportOptions): string {
     <!-- Footer -->
     <div class="report-footer">
       <span>AMYC - Mfumo wa Fedha</span>
-      <span>Imechapishwa: ${new Date().toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+      <span>Imechapishwa: ${escapeHtml(new Date().toLocaleDateString('sw-TZ', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }))}</span>
       <span class="page-counter"></span>
     </div>
   </div>
@@ -455,17 +535,6 @@ export function generateReportHTML(options: PrintReportOptions): string {
   </script>
 </body>
 </html>`;
-}
-
-function resolveOrientation(options: PrintReportOptions): 'portrait' | 'landscape' {
-  const hasLandscapeHint =
-    options.contentHtml.includes('class="landscape"') ||
-    options.contentHtml.includes("class='landscape'");
-  return options.orientation === 'auto' || !options.orientation
-    ? hasLandscapeHint
-      ? 'landscape'
-      : 'portrait'
-    : options.orientation;
 }
 
 function hasUnsupportedColor(value: string | null | undefined): boolean {
@@ -482,44 +551,37 @@ function sanitizeUnsupportedColors(doc: Document, view: Window | null | undefine
     const computed = view.getComputedStyle(el);
 
     const color = computed.color;
-    if (hasUnsupportedColor(color)) {
-      el.style.color = '#000000';
-    }
+    el.style.color = hasUnsupportedColor(color) ? '#000000' : color;
 
     const backgroundColor = computed.backgroundColor;
-    if (hasUnsupportedColor(backgroundColor)) {
-      el.style.backgroundColor = '#ffffff';
-    }
+    el.style.backgroundColor = hasUnsupportedColor(backgroundColor) ? '#ffffff' : backgroundColor;
 
     const borderColor = computed.borderColor;
-    if (hasUnsupportedColor(borderColor)) {
-      el.style.borderColor = '#333333';
-    }
+    el.style.borderColor = hasUnsupportedColor(borderColor) ? '#333333' : borderColor;
 
     const borderTopColor = computed.borderTopColor;
-    if (hasUnsupportedColor(borderTopColor)) {
-      el.style.borderTopColor = '#333333';
-    }
+    el.style.borderTopColor = hasUnsupportedColor(borderTopColor) ? '#333333' : borderTopColor;
 
     const borderRightColor = computed.borderRightColor;
-    if (hasUnsupportedColor(borderRightColor)) {
-      el.style.borderRightColor = '#333333';
-    }
+    el.style.borderRightColor = hasUnsupportedColor(borderRightColor) ? '#333333' : borderRightColor;
 
     const borderBottomColor = computed.borderBottomColor;
-    if (hasUnsupportedColor(borderBottomColor)) {
-      el.style.borderBottomColor = '#333333';
-    }
+    el.style.borderBottomColor = hasUnsupportedColor(borderBottomColor) ? '#333333' : borderBottomColor;
 
     const borderLeftColor = computed.borderLeftColor;
-    if (hasUnsupportedColor(borderLeftColor)) {
-      el.style.borderLeftColor = '#333333';
-    }
+    el.style.borderLeftColor = hasUnsupportedColor(borderLeftColor) ? '#333333' : borderLeftColor;
 
     const outlineColor = computed.outlineColor;
-    if (hasUnsupportedColor(outlineColor)) {
-      el.style.outlineColor = '#333333';
-    }
+    el.style.outlineColor = hasUnsupportedColor(outlineColor) ? '#333333' : outlineColor;
+
+    const fill = computed.fill;
+    if (hasUnsupportedColor(fill)) el.style.fill = '#000000';
+
+    const stroke = computed.stroke;
+    if (hasUnsupportedColor(stroke)) el.style.stroke = '#000000';
+
+    const boxShadow = computed.boxShadow;
+    if (hasUnsupportedColor(boxShadow)) el.style.boxShadow = 'none';
   }
 }
 
@@ -530,7 +592,7 @@ function withSuppressedUnsupportedColorLogs<T>(action: () => Promise<T>): Promis
     args.some(
       (arg) =>
         typeof arg === 'string' &&
-        arg.includes('Attempting to parse an unsupported color function "lab"'),
+        /Attempting to parse an unsupported color function "(lab|lch|oklab|oklch)"/.test(arg),
     );
 
   console.error = (...args: unknown[]) => {
@@ -556,6 +618,11 @@ export function openReportPrintPreview(options: PrintReportOptions): void {
 
 /** Chapa A4 kwa HTML maalum (tawi/jimbo unified, n.k.) */
 export function openHtmlPrintPreview(html: string): void {
+  if (isNativeApp()) {
+    openNativeHtmlPrintPreview(html);
+    return;
+  }
+
   const popup = window.open('', '_blank', 'width=1024,height=768');
   if (!popup) {
     alert('Pop-up imezuiwa. Ruhusu pop-ups ili kuchapa ripoti.');
@@ -565,6 +632,105 @@ export function openHtmlPrintPreview(html: string): void {
   popup.document.write(html);
   popup.document.close();
   popup.focus();
+}
+
+function openNativeHtmlPrintPreview(html: string): void {
+  const existing = document.getElementById('amyc-native-print-preview');
+  existing?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'amyc-native-print-preview';
+  overlay.style.cssText = [
+    'position:fixed',
+    'inset:0',
+    'z-index:2147483647',
+    'background:#ffffff',
+    'display:flex',
+    'flex-direction:column',
+  ].join(';');
+
+  const toolbar = document.createElement('div');
+  toolbar.style.cssText = [
+    'min-height:56px',
+    'padding:8px 10px',
+    'padding-top:max(8px, env(safe-area-inset-top, 8px))',
+    'display:flex',
+    'align-items:center',
+    'justify-content:flex-end',
+    'gap:8px',
+    'background:#f8fafc',
+    'border-bottom:1px solid #cbd5e1',
+  ].join(';');
+
+  const backButton = document.createElement('button');
+  backButton.type = 'button';
+  backButton.textContent = '← Rudi kwenye Ripoti';
+  backButton.style.cssText = nativePrintButtonStyle('#334155');
+
+  const printButton = document.createElement('button');
+  printButton.type = 'button';
+  printButton.textContent = 'Chapa A4';
+  printButton.style.cssText = nativePrintButtonStyle('#166534');
+
+  const frame = document.createElement('iframe');
+  frame.title = 'AMYC print preview';
+  frame.style.cssText = 'flex:1;width:100%;border:0;background:#fff;';
+  frame.srcdoc = html;
+
+  const closePreview = () => {
+    overlay.remove();
+    window.removeEventListener('popstate', closePreview);
+  };
+
+  backButton.onclick = () => {
+    if (window.history.state?.amycPrintPreview) {
+      window.history.back();
+    } else {
+      closePreview();
+    }
+  };
+
+  printButton.onclick = () => {
+    void printHtmlFromNativePreview(html, frame);
+  };
+
+  frame.onload = () => {
+    frame.contentDocument?.querySelectorAll('.print-actions, .no-print').forEach((el) => {
+      (el as HTMLElement).style.display = 'none';
+    });
+  };
+
+  toolbar.append(backButton, printButton);
+  overlay.append(toolbar, frame);
+  document.body.appendChild(overlay);
+  window.history.pushState({ amycPrintPreview: true }, '', window.location.href);
+  window.addEventListener('popstate', closePreview, { once: true });
+}
+
+async function printHtmlFromNativePreview(html: string, frame: HTMLIFrameElement) {
+  try {
+    await NativePrint.printHtml({
+      html,
+      jobName: 'AMYC Report',
+    });
+  } catch (error) {
+    console.warn('Native print failed; falling back to WebView print.', error);
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  }
+}
+
+function nativePrintButtonStyle(background: string) {
+  return [
+    `background:${background}`,
+    'color:#fff',
+    'border:0',
+    'border-radius:6px',
+    'font-weight:700',
+    'font-size:14px',
+    'min-height:40px',
+    'padding:8px 12px',
+  ].join(';');
 }
 
 export function printReport(options: PrintReportOptions): void {
@@ -591,7 +757,12 @@ export async function downloadReportPDF(options: PrintReportOptions) {
   try {
     await generateReportPDF(options);
   } catch (error) {
-    console.error('PDF export failed, falling back to HTML download.', error);
+    console.error('PDF export failed.', error);
+    if (isNativeApp()) {
+      toast.error('PDF imeshindikana kwenye simu. Jaribu tena au tumia Chapa A4.');
+      return;
+    }
+    toast.error('PDF imeshindikana. Nimehifadhi HTML badala yake.');
     downloadReportHTML(options);
   }
 }
@@ -601,44 +772,120 @@ export type HtmlPdfOptions = {
   orientation?: 'portrait' | 'landscape' | 'auto';
 };
 
+function prepareHtmlForPdfExport(html: string): string {
+  const pdfFitStyles = `
+  <style id="amyc-pdf-fit-styles">
+    @page { size: A4 landscape; }
+    html,
+    body {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      background: #ffffff !important;
+    }
+    body.pdf-export .report-shell,
+    body.pdf-export .wrapper {
+      width: 100% !important;
+      max-width: none !important;
+      min-height: auto !important;
+      margin: 0 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+      background: #ffffff !important;
+    }
+    body.pdf-export table {
+      width: 100% !important;
+    }
+  </style>`;
+
+  const htmlWithPdfClass = /<body\b[^>]*class=/i.test(html)
+    ? html.replace(/<body\b([^>]*?)class=(["'])(.*?)\2/i, '<body$1class=$2$3 pdf-export$2')
+    : html.replace(/<body\b([^>]*)>/i, '<body$1 class="pdf-export">');
+
+  if (/<\/head>/i.test(htmlWithPdfClass)) {
+    return htmlWithPdfClass.replace(/<\/head>/i, `${pdfFitStyles}\n</head>`);
+  }
+
+  return `${pdfFitStyles}\n${htmlWithPdfClass}`;
+}
+
+async function saveJsPdfOnNative(
+  pdf: { output: (type: 'arraybuffer') => ArrayBuffer },
+  fileName: string,
+) {
+  const { saveNativeBase64File } = await import('@/lib/native-files');
+  console.log('[PDF Native] Converting PDF to base64');
+  const base64Data = arrayBufferToBase64(pdf.output('arraybuffer'));
+  console.log('[PDF Native] Base64 length:', base64Data.length);
+  await saveNativeBase64File({
+    fileName,
+    base64Data,
+    mimeType: 'application/pdf',
+    share: false,
+  });
+  console.log('[PDF Native] File saved successfully');
+}
+
 export async function downloadHtmlAsPdf(html: string, options: HtmlPdfOptions): Promise<void> {
-  const orientation =
-    options.orientation === 'auto' || !options.orientation
-      ? html.includes('class="landscape"') ||
-        html.includes("class='landscape'") ||
-        html.includes('@page { size: A4 landscape')
-        ? 'landscape'
-        : 'portrait'
-      : options.orientation;
+  const orientation = 'landscape';
+
+  const fileName = options.fileName.endsWith('.pdf') ? options.fileName : `${options.fileName}.pdf`;
+  const pdfHtml = prepareHtmlForPdfExport(html);
+
+  console.log('[PDF] Starting download:', { fileName, orientation, isNative: isNativeApp(), htmlLength: html.length });
+
+  if (isNativeApp()) {
+    try {
+      const result = await NativePdf.saveHtmlAsPdf({
+        html: pdfHtml,
+        fileName,
+        orientation,
+      });
+      const locationText = result.savedToDownloads ? 'Downloads/AMYC' : 'hifadhi ya programu';
+      toast.success(`PDF imehifadhiwa: ${fileName} (${locationText})`);
+      return;
+    } catch (nativeError) {
+      console.warn('[PDF Native] NativePdf failed; falling back to canvas PDF.', nativeError);
+    }
+  }
 
   await withSuppressedUnsupportedColorLogs(async () => {
     const frame = document.createElement('iframe');
     frame.setAttribute('aria-hidden', 'true');
     frame.style.cssText =
-      'position:fixed;left:-12000px;top:0;border:none;visibility:hidden;';
+      'position:fixed;left:0;top:0;border:none;pointer-events:none;z-index:-1;background:#ffffff;';
     frame.style.width = orientation === 'landscape' ? '1123px' : '794px';
+    frame.style.minHeight = '1123px';
     document.body.appendChild(frame);
+    console.log('[PDF] Iframe created and appended');
 
     const frameDoc = frame.contentDocument;
     if (!frameDoc) {
       document.body.removeChild(frame);
+      console.error('[PDF] ERROR: Iframe document is null');
       throw new Error('Iframe document unavailable');
     }
 
+    console.log('[PDF] Iframe document available, writing HTML');
     frameDoc.open();
-    frameDoc.write(html);
+    frameDoc.write(pdfHtml);
     frameDoc.close();
+    console.log('[PDF] HTML written to iframe');
 
+    const renderDelay = isNativeApp() ? 600 : 200;
     await new Promise<void>((resolve) => {
       const done = () => resolve();
       if (frame.contentWindow?.document.readyState === 'complete') {
-        setTimeout(done, 200);
+        setTimeout(done, renderDelay);
       } else {
-        frame.onload = () => setTimeout(done, 200);
+        frame.onload = () => setTimeout(done, renderDelay);
       }
     });
+    console.log('[PDF] Iframe document rendered, readyState:', frame.contentWindow?.document.readyState);
+    await waitForRender(isNativeApp() ? 200 : 0);
 
     sanitizeUnsupportedColors(frameDoc, frame.contentWindow);
+    frameDoc.body.classList.add('pdf-export');
     frameDoc.querySelectorAll('.no-print, .print-actions').forEach((el) => {
       (el as HTMLElement).style.display = 'none';
     });
@@ -648,21 +895,87 @@ export async function downloadHtmlAsPdf(html: string, options: HtmlPdfOptions): 
       (frameDoc.querySelector('.wrapper') as HTMLElement | null) ||
       frameDoc.body;
 
-    const html2canvas = (await import('html2canvas')).default;
-    const canvas = await html2canvas(root, {
-      scale: 2,
-      useCORS: true,
-      logging: false,
-      backgroundColor: '#ffffff',
-      width: root.scrollWidth,
-      height: root.scrollHeight,
-      windowWidth: root.scrollWidth,
-      windowHeight: root.scrollHeight,
+    console.log('[PDF] Root element found:', { 
+      tagName: root?.tagName, 
+      scrollWidth: root?.scrollWidth, 
+      scrollHeight: root?.scrollHeight,
+      innerHTML: root?.innerHTML?.substring(0, 100),
+      textContent: root?.textContent?.substring(0, 50)
     });
 
+    // Check if root has content
+    if (!root || !root.textContent || root.textContent.trim().length === 0) {
+      console.error('[PDF] ERROR: Root element has no text content!');
+      document.body.removeChild(frame);
+      throw new Error('PDF root element is empty - HTML rendering failed in iframe');
+    }
+
+    // Check if dimensions are too small (likely rendering issue)
+    if ((root.scrollWidth || 0) < 100 || (root.scrollHeight || 0) < 100) {
+      console.warn('[PDF] Root element dimensions suspiciously small:', { 
+        scrollWidth: root.scrollWidth, 
+        scrollHeight: root.scrollHeight 
+      });
+    }
+
+    const html2canvas = (await import('html2canvas')).default;
+    const nativeCanvas = isNativeApp();
+    const canvasOptions = (scale: number) => ({
+      scale,
+      useCORS: true,
+      allowTaint: true,
+      foreignObjectRendering: false,
+      logging: false,
+      backgroundColor: '#ffffff',
+      width: Math.max(root.scrollWidth, 1),
+      height: Math.max(root.scrollHeight, 1),
+      windowWidth: Math.max(root.scrollWidth, 1),
+      windowHeight: Math.max(root.scrollHeight, 1),
+      onclone: (clonedDoc: Document) => sanitizeUnsupportedColors(clonedDoc, clonedDoc.defaultView),
+    });
+
+    let canvas: HTMLCanvasElement;
+    const primaryScale = nativeCanvas ? 1.25 : 2;
+    const fallbackScale = nativeCanvas ? 1 : 1.25;
+    console.log('[PDF] Starting html2canvas with scale:', primaryScale);
+    try {
+      canvas = await html2canvas(root, canvasOptions(primaryScale));
+      console.log('[PDF] Canvas created:', { width: canvas.width, height: canvas.height });
+    } catch (error) {
+      console.warn('[PDF] High resolution PDF canvas failed; retrying with standard scale.', error);
+      canvas = await html2canvas(root, canvasOptions(fallbackScale));
+      console.log('[PDF] Canvas created (fallback):', { width: canvas.width, height: canvas.height });
+    }
+
+    if (!canvas.width || !canvas.height) {
+      console.error('[PDF] ERROR: Canvas dimensions are zero!', { width: canvas.width, height: canvas.height });
+      console.warn('[PDF] html2canvas failed on this device - attempting native PDF via print');
+      document.body.removeChild(frame);
+
+      if (isNativeApp()) {
+        // Fallback: Use native print to save as PDF
+        console.log('[PDF] Using native print as fallback');
+        try {
+          await NativePrint.printHtml({
+            html: pdfHtml,
+            jobName: fileName.replace('.pdf', ''),
+          });
+          toast.success(`PDF imetengenezwa kupitia simu: ${fileName}`);
+          return;
+        } catch (fallbackError) {
+          console.error('[PDF] Native print also failed:', fallbackError);
+          toast.error('PDF generation failed on this device');
+          throw new Error('PDF canvas is empty and native print failed');
+        }
+      }
+      throw new Error('PDF canvas is empty on this device.');
+    }
+
+    console.log('[PDF] Canvas dimensions valid, removing iframe');
     document.body.removeChild(frame);
 
     const { jsPDF } = await import('jspdf');
+    console.log('[PDF] jsPDF imported, creating PDF document');
     const pdf = new jsPDF({ orientation, unit: 'pt', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
@@ -670,10 +983,13 @@ export async function downloadHtmlAsPdf(html: string, options: HtmlPdfOptions): 
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     const imgData = canvas.toDataURL('image/jpeg', 0.92);
 
+    console.log('[PDF] PDF config:', { pageWidth, pageHeight, imgWidth, imgHeight, imgDataLength: imgData.length });
+
     let heightLeft = imgHeight;
     let position = 0;
 
     pdf.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+    console.log('[PDF] First image added to PDF');
     heightLeft -= pageHeight;
 
     while (heightLeft > 0) {
@@ -683,26 +999,32 @@ export async function downloadHtmlAsPdf(html: string, options: HtmlPdfOptions): 
       heightLeft -= pageHeight;
     }
 
-    const fileName = options.fileName.endsWith('.pdf') ? options.fileName : `${options.fileName}.pdf`;
-    const { isNativeApp, saveNativeBase64File } = await import('@/lib/native-files');
+    const pageCount = pdf.getNumberOfPages();
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(9);
+    pdf.setTextColor(51, 65, 85);
+    for (let page = 1; page <= pageCount; page += 1) {
+      pdf.setPage(page);
+      pdf.text(`Ukurasa ${page} / ${pageCount}`, pageWidth - 72, pageHeight - 18, { align: 'right' });
+    }
+
+    console.log('[PDF] All pages added to PDF');
+
     if (isNativeApp()) {
-      const dataUri = pdf.output('datauristring');
-      const base64Data = dataUri.split(',')[1] || '';
-      await saveNativeBase64File({
-        fileName,
-        base64Data,
-        mimeType: 'application/pdf',
-        share: true,
-      });
+      console.log('[PDF] Saving to native storage');
+      await saveJsPdfOnNative(pdf, fileName);
+      console.log('[PDF] Native save completed');
     } else {
+      console.log('[PDF] Saving via browser download');
       pdf.save(fileName);
+      toast.success(`PDF imedownloadiwa: ${fileName}`);
     }
   });
 }
 
 export async function generateReportPDF(options: PrintReportOptions) {
-  const html = generateReportHTML(options);
-  const orientation = resolveOrientation(options);
+  const orientation = 'landscape';
+  const html = generateReportHTML({ ...options, orientation });
   const fileName = `${options.title.replace(/\s+/g, '_')}_${options.year}.pdf`;
   await downloadHtmlAsPdf(html, { fileName, orientation });
 }

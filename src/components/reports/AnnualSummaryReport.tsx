@@ -5,7 +5,7 @@ import { getMonthlySummary } from '@/lib/db-offline';
 import { MONTHS, MONTHS_SHORT } from '@/lib/types';
 import type { OrgLevel } from '@/lib/types';
 import { useAuthStore } from '@/lib/store';
-import { calculateOfflinePeriodBalance } from '@/lib/finance/offline-balance-engine';
+import { calculateOfflinePeriodBalance, type OfflineMonthlyBalance } from '@/lib/finance/offline-balance-engine';
 import {
   Table,
   TableBody,
@@ -24,6 +24,7 @@ import {
   buildPrintTable,
 } from '@/lib/print-report';
 import * as XLSX from 'xlsx';
+import { saveWorkbookFile } from '@/lib/export-workbook';
 
 // ── Props ────────────────────────────────────────────────
 interface AnnualSummaryReportProps {
@@ -65,58 +66,61 @@ export default function AnnualSummaryReport({
   const generatedAt = new Date().toLocaleString('sw-TZ');
   const [incomeByMonth, setIncomeByMonth] = useState<number[]>(new Array(12).fill(0));
   const [expenseByMonth, setExpenseByMonth] = useState<number[]>(new Array(12).fill(0));
-  const [openingBalance, setOpeningBalance] = useState(0);
+  const [monthlyBalances, setMonthlyBalances] = useState<OfflineMonthlyBalance[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadData();
-  }, [orgUnitId, year]);
+  }, [orgUnitId, year, monthMode, month]);
 
   const loadData = async () => {
     setLoading(true);
     try {
+      const reportMonth = monthMode === 'single' && month && month >= 1 && month <= 12 ? month : undefined;
       const { incomeByMonth, expenseByMonth } = await getMonthlySummary(orgUnitId, year);
-      const balance = await calculateOfflinePeriodBalance(orgUnitId, year);
+      const balance = await calculateOfflinePeriodBalance(orgUnitId, year, reportMonth);
       setIncomeByMonth(incomeByMonth);
       setExpenseByMonth(expenseByMonth);
-      setOpeningBalance(balance.openingBalance);
+      setMonthlyBalances(balance.monthlyData);
     } finally {
       setLoading(false);
     }
   };
 
   // ── Calculations ───────────────────────────────────────
-  const bakaa = openingBalance;
+  const balanceByMonth = new Map(monthlyBalances.map((item) => [item.month, item]));
 
-  // Running total of income (MAPATO JUMLA)
-  const mapatoJumla: number[] = [];
-  let runningTotal = 0;
-  for (let i = 0; i < 12; i++) {
-    runningTotal += incomeByMonth[i];
-    mapatoJumla.push(runningTotal);
-  }
-
-  // Balance (SALIO = BAKAA + MAPATO JUMLA - MATUMIZI)
-  const salio: number[] = [];
-  for (let i = 0; i < 12; i++) {
-    salio.push(bakaa + mapatoJumla[i] - expenseByMonth[i]);
-  }
-
-  const totalMapato = incomeByMonth.reduce((s, v) => s + v, 0);
-  const totalMatumizi = expenseByMonth.reduce((s, v) => s + v, 0);
-  const totalMapatoJumla = mapatoJumla[11];
-  const totalSalio = bakaa + totalMapatoJumla - totalMatumizi;
-  const asilimia = totalMapato > 0 ? ((totalMatumizi / totalMapato) * 100).toFixed(1) : '0.0';
-
-  // Determine which month indices to display (hide months with zero income AND zero expense)
   const allMonthIndices: number[] =
     monthMode === 'single' && month != null && month >= 1 && month <= 12
       ? [month - 1]
       : Array.from({ length: 12 }, (_, i) => i);
 
-  const displayMonthIndices = allMonthIndices.filter(
-    (i) => incomeByMonth[i] !== 0 || expenseByMonth[i] !== 0
-  );
+  const displayMonthIndices = allMonthIndices;
+
+  const periodMonthIndices = monthMode === 'single' ? allMonthIndices : displayMonthIndices;
+
+  // Running totals follow bank-statement flow: opening + income = total, then total - expense = closing.
+  const salioLaMwanzo: number[] = new Array(12).fill(0);
+  const mapatoJumla: number[] = new Array(12).fill(0);
+  const salio: number[] = new Array(12).fill(0);
+  for (const i of periodMonthIndices) {
+    const balance = balanceByMonth.get(i + 1);
+    const opening = balance?.openingBalance || 0;
+    const income = balance?.totalIncome ?? incomeByMonth[i];
+    const expense = balance?.totalExpense ?? expenseByMonth[i];
+    salioLaMwanzo[i] = opening;
+    mapatoJumla[i] = opening + income;
+    salio[i] = balance?.closingBalance ?? opening + income - expense;
+  }
+
+  const totalMapato = periodMonthIndices.reduce((s, i) => s + incomeByMonth[i], 0);
+  const totalMatumizi = periodMonthIndices.reduce((s, i) => s + expenseByMonth[i], 0);
+  const firstMonthIndex = periodMonthIndices[0];
+  const lastMonthIndex = periodMonthIndices[periodMonthIndices.length - 1];
+  const totalSalioLaMwanzo = firstMonthIndex === undefined ? 0 : salioLaMwanzo[firstMonthIndex];
+  const totalMapatoJumla = totalSalioLaMwanzo + totalMapato;
+  const totalSalio = lastMonthIndex === undefined ? 0 : salio[lastMonthIndex];
+  const asilimia = totalMapato > 0 ? ((totalMatumizi / totalMapato) * 100).toFixed(1) : '0.0';
 
   // ── Print / PDF ────────────────────────────────────────
   const buildPrintOptions = () => {
@@ -127,13 +131,14 @@ export default function AnnualSummaryReport({
       : 'Mwaka Kamili';
 
     // Build table rows for print
-    const headers = ['MWEZI', 'MAPATO', 'MAPATO JUMLA', 'MATUMIZI', 'SALIO'];
+    const headers = ['MWEZI', 'SALIO LA MWANZO', 'MAPATO', 'JUMLA', 'MATUMIZI', 'SALIO'];
     const rows: (string | number)[][] = [];
 
     // Month rows
     for (const i of displayMonthIndices) {
       rows.push([
         MONTHS[i],
+        formatPrintNum(salioLaMwanzo[i]),
         formatPrintNum(incomeByMonth[i]),
         formatPrintNum(mapatoJumla[i]),
         formatPrintNum(expenseByMonth[i]),
@@ -144,6 +149,7 @@ export default function AnnualSummaryReport({
     // Totals
     const totalRow: (string | number)[] = [
       'JUMLA',
+      formatPrintNum(totalSalioLaMwanzo),
       formatPrintNum(totalMapato),
       formatPrintNum(totalMapatoJumla),
       formatPrintNum(totalMatumizi),
@@ -151,10 +157,10 @@ export default function AnnualSummaryReport({
     ];
 
     const footerRows: (string | number)[][] = [
-      ['ASILIMIA (%)', '100%', '—', `${asilimia}%`, '—'],
+      ['ASILIMIA (%)', '-', '100%', '-', `${asilimia}%`, '-'],
     ];
 
-    const colAligns: ('left' | 'center' | 'right')[] = ['left', 'right', 'right', 'right', 'right'];
+    const colAligns: ('left' | 'center' | 'right')[] = ['left', 'right', 'right', 'right', 'right', 'right'];
 
     const contentHtml = buildPrintTable(headers, rows, {
       totalRow,
@@ -186,19 +192,20 @@ export default function AnnualSummaryReport({
   };
 
   // ── Export to Excel ────────────────────────────────────
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     const wsData: (string | number)[][] = [
       ['ANSAAR MUSLIM YOUTH CENTRE'],
       [officeLabel(orgLevel, orgName)],
       [`TAARIFA YA MAPATO NA MATUMIZI KWA MWAKA: ${year}`],
       [],
-      ['MWEZI', 'MAPATO', 'MAPATO JUMLA', 'MATUMIZI', 'SALIO'],
+      ['MWEZI', 'SALIO LA MWANZO', 'MAPATO', 'JUMLA', 'MATUMIZI', 'SALIO'],
     ];
 
     // Month rows
     for (const i of displayMonthIndices) {
       wsData.push([
         MONTHS[i],
+        salioLaMwanzo[i],
         incomeByMonth[i],
         mapatoJumla[i],
         expenseByMonth[i],
@@ -207,15 +214,15 @@ export default function AnnualSummaryReport({
     }
 
     // JUMLA row
-    wsData.push(['JUMLA', totalMapato, totalMapatoJumla, totalMatumizi, totalSalio]);
+    wsData.push(['JUMLA', totalSalioLaMwanzo, totalMapato, totalMapatoJumla, totalMatumizi, totalSalio]);
 
     // ASILIMIA row
-    wsData.push(['ASILIMIA (%)', '', '', `${asilimia}%`, '']);
+    wsData.push(['ASILIMIA (%)', '', '', '', `${asilimia}%`, '']);
 
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Taarifa ya Mwaka');
-    XLSX.writeFile(wb, `Taarifa_Mwaka_${orgName}_${year}.xlsx`);
+    await saveWorkbookFile(wb, `Taarifa_Mwaka_${orgName}_${year}.xlsx`);
   };
 
   // ── Render ─────────────────────────────────────────────
@@ -276,35 +283,15 @@ export default function AnnualSummaryReport({
         </Button>
       </div>
 
-      {/* Signature area */}
-      <div className="flex justify-between gap-8 mt-8 pt-6 border-t border-emerald-200">
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mudir: {currentOrg?.mudirName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mudirSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mwekahazina: {currentOrg?.mwekahazinaName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mwekahazinaSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700">
-            Tarehe: _________________________
-          </div>
-        </div>
-      </div>
-
       {/* Report table */}
       <div className="border rounded-lg overflow-x-auto">
         <Table className="[&_th]:border [&_td]:border [&_th]:border-emerald-400 [&_td]:border-emerald-300">
           <TableHeader>
             <TableRow className="bg-emerald-800 hover:bg-emerald-800">
               <TableHead className="text-white font-bold w-32">MWEZI</TableHead>
+              <TableHead className="text-white font-bold text-right">SALIO LA MWANZO</TableHead>
               <TableHead className="text-white font-bold text-right">MAPATO</TableHead>
-              <TableHead className="text-white font-bold text-right">MAPATO JUMLA</TableHead>
+              <TableHead className="text-white font-bold text-right">JUMLA</TableHead>
               <TableHead className="text-white font-bold text-right">MATUMIZI</TableHead>
               <TableHead className="text-white font-bold text-right">SALIO</TableHead>
             </TableRow>
@@ -314,6 +301,7 @@ export default function AnnualSummaryReport({
             {displayMonthIndices.map((i) => (
               <TableRow key={MONTHS[i]} className={i % 2 === 1 ? 'bg-muted/30' : ''}>
                 <TableCell className="font-medium">{MONTHS[i]}</TableCell>
+                <TableCell className="text-right">{formatNum(salioLaMwanzo[i])}</TableCell>
                 <TableCell className="text-right">{formatNum(incomeByMonth[i])}</TableCell>
                 <TableCell className="text-right font-medium">{formatNum(mapatoJumla[i])}</TableCell>
                 <TableCell className="text-right">{formatNum(expenseByMonth[i])}</TableCell>
@@ -327,6 +315,7 @@ export default function AnnualSummaryReport({
             {/* JUMLA row */}
             <TableRow className="bg-emerald-900 text-white font-bold hover:bg-emerald-900">
               <TableCell className="font-bold text-white">JUMLA</TableCell>
+              <TableCell className="text-right text-white">{formatNum(totalSalioLaMwanzo)}</TableCell>
               <TableCell className="text-right text-white">{formatNum(totalMapato)}</TableCell>
               <TableCell className="text-right text-white">{formatNum(totalMapatoJumla)}</TableCell>
               <TableCell className="text-right text-white">{formatNum(totalMatumizi)}</TableCell>
@@ -337,10 +326,11 @@ export default function AnnualSummaryReport({
             {/* ASILIMIA row */}
             <TableRow className="bg-emerald-800 text-white hover:bg-emerald-800">
               <TableCell className="font-bold text-white">ASILIMIA (%)</TableCell>
+              <TableCell className="text-right text-white">-</TableCell>
               <TableCell className="text-right text-white">100%</TableCell>
-              <TableCell className="text-right text-white">—</TableCell>
+              <TableCell className="text-right text-white">-</TableCell>
               <TableCell className="text-right text-white">{asilimia}%</TableCell>
-              <TableCell className="text-right text-white">—</TableCell>
+              <TableCell className="text-right text-white">-</TableCell>
             </TableRow>
           </TableFooter>
         </Table>

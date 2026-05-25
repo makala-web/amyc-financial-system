@@ -23,12 +23,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Download, Printer, RefreshCw, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import FinancialPeriodSummary from '@/components/reports/FinancialPeriodSummary';
+import { saveWorkbookFile } from '@/lib/export-workbook';
 import {
-  appendFinancialSummaryExcelRows,
-  buildFinancialSummaryPrintHtml,
   pctOfPart,
 } from '@/lib/reports/finance-percentages';
+import { aggregateIncomeWithIntegrity } from '@/lib/financial-report-integrity';
 
 // ── Grouped income categories per DOCX spec ─────────────
 const INCOME_GROUPS = [
@@ -106,21 +105,9 @@ const MONTH_NAMES = [
   'Julai', 'Agosti', 'Septemba', 'Oktoba', 'Novemba', 'Desemba',
 ];
 
-// ── Aggregate helper ─────────────────────────────────────
+// ── Aggregate helper (includes uncategorized income for correct totals) ──
 function aggregateGroups(transactions: Transaction[]) {
-  return INCOME_GROUPS.map((group) => {
-    const matching = transactions.filter((t) =>
-      group.categories.includes(t.category_name)
-    );
-    const totalAmount = matching.reduce((sum, t) => sum + t.amount, 0);
-    const departments = [...new Set(matching.map((t) => t.department))];
-    return {
-      label: group.label,
-      amount: totalAmount,
-      department: departments.join(', ') || '—',
-      items: matching,
-    };
-  });
+  return aggregateIncomeWithIntegrity(transactions, INCOME_GROUPS).groups;
 }
 
 // ── Component ────────────────────────────────────────────
@@ -267,13 +254,6 @@ export default function MonthlyIncomeReport({
           totalRow: ['', '', 'JUMLA YA MAPATO', '', formatPrintNum(monthTotal), '100%'],
           colAligns: ['left', 'left', 'left', 'left', 'right', 'right'],
         });
-        contentHtml += buildFinancialSummaryPrintHtml(
-          monthTotal,
-          monthExpense,
-          formatPrintNum,
-          buildPrintTable,
-          `Muhtasari — ${MONTH_NAMES[m - 1]}`,
-        );
       }
 
       // Grand total section
@@ -291,13 +271,6 @@ export default function MonthlyIncomeReport({
         totalRow: ['JUMLA KUU', formatPrintNum(grandGrandTotal)],
         colAligns: ['left', 'right'],
       });
-      contentHtml += buildFinancialSummaryPrintHtml(
-        grandGrandTotal,
-        yearExpenseTotal,
-        formatPrintNum,
-        buildPrintTable,
-        `Muhtasari wa Mwaka ${year}`,
-      );
 
       return {
         title: 'Fomu ya Mapato kwa Mwaka',
@@ -357,12 +330,6 @@ export default function MonthlyIncomeReport({
         totalRow: ['', '', 'JUMLA YA MAPATO', '', formatPrintNum(grandTotal), '100%'],
         colAligns: ['left', 'left', 'left', 'left', 'right', 'right'],
       });
-      contentHtml += buildFinancialSummaryPrintHtml(
-        grandTotal,
-        periodExpenseTotal,
-        formatPrintNum,
-        buildPrintTable,
-      );
 
       return {
         title: 'Fomu ya Mapato kwa Mwezi',
@@ -389,7 +356,7 @@ export default function MonthlyIncomeReport({
   };
 
   // ── Export to Excel ────────────────────────────────────
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (isAllMonths) {
       const wb = XLSX.utils.book_new();
       let grandGrandTotal = 0;
@@ -444,11 +411,6 @@ export default function MonthlyIncomeReport({
 
         wsData.push([]);
         wsData.push(['', '', 'JUMLA YA MAPATO', '', monthTotal, '100%']);
-        appendFinancialSummaryExcelRows(
-          wsData,
-          monthTotal,
-          allMonthsExpenseTotals.get(m) || 0,
-        );
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, MONTH_NAMES[m - 1]);
@@ -470,11 +432,9 @@ export default function MonthlyIncomeReport({
       }
       summaryData.push([]);
       summaryData.push(['JUMLA KUU', grandGrandTotal]);
-      appendFinancialSummaryExcelRows(summaryData, grandGrandTotal, yearExpenseTotal);
-
       const ws = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, ws, 'Jumla Kuu');
-      XLSX.writeFile(wb, `Mapato_Mwaka_${orgName}_${year}.xlsx`);
+      await saveWorkbookFile(wb, `Mapato_Mwaka_${orgName}_${year}.xlsx`);
     } else {
       const wsData: (string | number)[][] = [
         ['ANSAAR MUSLIM YOUTH CENTRE'],
@@ -486,14 +446,7 @@ export default function MonthlyIncomeReport({
 
       groupData.filter(g => g.items.length > 0 || g.amount > 0).forEach((g) => {
         if (g.items.length === 0) {
-          wsData.push([
-            '',
-            '',
-            g.label,
-            g.department,
-            g.amount,
-            pctOfPart(g.amount, grandTotal),
-          ]);
+          wsData.push(['', '', g.label, g.department, g.amount, pctOfPart(g.amount, grandTotal)]);
         } else {
           g.items.forEach((item, j) => {
             wsData.push([
@@ -506,37 +459,19 @@ export default function MonthlyIncomeReport({
             ]);
           });
           if (g.items.length > 1) {
-            wsData.push([
-              '',
-              '',
-              `  Jumla: ${g.label}`,
-              '',
-              g.amount,
-              pctOfPart(g.amount, grandTotal),
-            ]);
+            wsData.push(['', '', `  Jumla: ${g.label}`, '', g.amount, pctOfPart(g.amount, grandTotal)]);
           }
         }
       });
 
       wsData.push([]);
       wsData.push(['', '', 'JUMLA YA MAPATO', '', grandTotal, '100%']);
-      appendFinancialSummaryExcelRows(wsData, grandTotal, periodExpenseTotal);
-
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Mapato kwa Mwezi');
-      XLSX.writeFile(wb, `Mapato_Mwezi_${orgName}_${MONTH_NAMES[month - 1]}_${year}.xlsx`);
+      await saveWorkbookFile(wb, `Mapato_Mwezi_${orgName}_${MONTH_NAMES[month - 1]}_${year}.xlsx`);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-        <span className="ml-2 text-muted-foreground">Inapakia taarifa...</span>
-      </div>
-    );
-  }
 
   // ── Render a single month table ─────────────────────────
   const renderMonthTable = (monthTxns: Transaction[], monthNum: number) => {
@@ -611,12 +546,6 @@ export default function MonthlyIncomeReport({
             </TableFooter>
           </Table>
         </div>
-        <FinancialPeriodSummary
-          income={total}
-          expense={monthExpense}
-          title={`Muhtasari — ${MONTH_NAMES[monthNum - 1]}`}
-          className="mt-2"
-        />
       </div>
     );
   };
@@ -663,11 +592,6 @@ export default function MonthlyIncomeReport({
             </TableFooter>
           </Table>
         </div>
-        <FinancialPeriodSummary
-          income={totalAll}
-          expense={yearExpenseTotal}
-          title={`Muhtasari wa Mwaka ${year}`}
-        />
       </div>
     );
   };
@@ -715,27 +639,6 @@ export default function MonthlyIncomeReport({
           <Download className="h-4 w-4 mr-1" />
           Hamisha Excel
         </Button>
-      </div>
-
-      {/* Signature area */}
-      <div className="flex justify-between gap-8 mt-4 pt-6 border-t border-emerald-200">
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mudir: {currentOrg?.mudirName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mudirSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mwekahazina: {currentOrg?.mwekahazinaName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mwekahazinaSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700">
-            Tarehe: _________________________
-          </div>
-        </div>
       </div>
 
       {/* Table(s) */}
@@ -810,7 +713,6 @@ export default function MonthlyIncomeReport({
               </TableFooter>
             </Table>
           </div>
-          <FinancialPeriodSummary income={grandTotal} expense={periodExpenseTotal} />
         </div>
       )}
     </div>

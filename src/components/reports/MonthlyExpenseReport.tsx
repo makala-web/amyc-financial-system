@@ -23,10 +23,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Download, Printer, RefreshCw, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import FinancialPeriodSummary from '@/components/reports/FinancialPeriodSummary';
+import { saveWorkbookFile } from '@/lib/export-workbook';
 import {
-  appendFinancialSummaryExcelRows,
-  buildFinancialSummaryPrintHtml,
   pctOfPart,
 } from '@/lib/reports/finance-percentages';
 
@@ -202,13 +200,6 @@ export default function MonthlyExpenseReport({
           ],
           colAligns: ['left', 'left', 'left', 'center', 'center', 'left', 'right', 'right', 'right'],
         });
-        contentHtml += buildFinancialSummaryPrintHtml(
-          monthIncome,
-          monthTotal,
-          formatPrintNum,
-          buildPrintTable,
-          `Muhtasari — ${MONTH_NAMES[m - 1]}`,
-        );
       }
 
       // Grand total section
@@ -225,13 +216,6 @@ export default function MonthlyExpenseReport({
         totalRow: ['JUMLA KUU', formatPrintNum(grandGrandTotal)],
         colAligns: ['left', 'right'],
       });
-      contentHtml += buildFinancialSummaryPrintHtml(
-        yearIncomeTotal,
-        grandGrandTotal,
-        formatPrintNum,
-        buildPrintTable,
-        `Muhtasari wa Mwaka ${year}`,
-      );
 
       return {
         title: 'Fomu ya Matumizi kwa Mwaka',
@@ -293,12 +277,6 @@ export default function MonthlyExpenseReport({
         ],
         colAligns: ['left', 'left', 'left', 'center', 'center', 'left', 'right', 'right', 'right'],
       });
-      contentHtml += buildFinancialSummaryPrintHtml(
-        periodIncomeTotal,
-        grandTotal,
-        formatPrintNum,
-        buildPrintTable,
-      );
 
       return {
         title: 'Fomu ya Matumizi kwa Mwezi',
@@ -325,7 +303,7 @@ export default function MonthlyExpenseReport({
   };
 
   // ── Export to Excel ────────────────────────────────────
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (isAllMonths) {
       const wb = XLSX.utils.book_new();
       let grandGrandTotal = 0;
@@ -359,11 +337,6 @@ export default function MonthlyExpenseReport({
 
         wsData.push([]);
         wsData.push(['', '', 'JUMLA YA MATUMIZI', '', '', '', '', monthTotal, '100%']);
-        appendFinancialSummaryExcelRows(
-          wsData,
-          allMonthsIncomeTotals.get(m) || 0,
-          monthTotal,
-        );
 
         const ws = XLSX.utils.aoa_to_sheet(wsData);
         XLSX.utils.book_append_sheet(wb, ws, MONTH_NAMES[m - 1]);
@@ -384,11 +357,9 @@ export default function MonthlyExpenseReport({
       }
       summaryData.push([]);
       summaryData.push(['JUMLA KUU', grandGrandTotal]);
-      appendFinancialSummaryExcelRows(summaryData, yearIncomeTotal, grandGrandTotal);
-
       const ws = XLSX.utils.aoa_to_sheet(summaryData);
       XLSX.utils.book_append_sheet(wb, ws, 'Jumla Kuu');
-      XLSX.writeFile(wb, `Matumizi_Mwaka_${orgName}_${year}.xlsx`);
+      await saveWorkbookFile(wb, `Matumizi_Mwaka_${orgName}_${year}.xlsx`);
     } else {
       const wsData: (string | number)[][] = [
         ['ANSAAR MUSLIM YOUTH CENTRE'],
@@ -414,23 +385,12 @@ export default function MonthlyExpenseReport({
 
       wsData.push([]);
       wsData.push(['', '', 'JUMLA YA MATUMIZI', '', '', '', '', grandTotal, '100%']);
-      appendFinancialSummaryExcelRows(wsData, periodIncomeTotal, grandTotal);
-
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Matumizi kwa Mwezi');
-      XLSX.writeFile(wb, `Matumizi_Mwezi_${orgName}_${MONTH_NAMES[month - 1]}_${year}.xlsx`);
+      await saveWorkbookFile(wb, `Matumizi_Mwezi_${orgName}_${MONTH_NAMES[month - 1]}_${year}.xlsx`);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <RefreshCw className="h-6 w-6 animate-spin text-emerald-600" />
-        <span className="ml-2 text-muted-foreground">Inapakia taarifa...</span>
-      </div>
-    );
-  }
 
   // ── Render a single month table ─────────────────────────
   const renderMonthTable = (monthTxns: Transaction[], monthNum: number) => {
@@ -499,12 +459,6 @@ export default function MonthlyExpenseReport({
             </TableFooter>
           </Table>
         </div>
-        <FinancialPeriodSummary
-          income={monthIncome}
-          expense={monthTotal}
-          title={`Muhtasari — ${MONTH_NAMES[monthNum - 1]}`}
-          className="mt-2"
-        />
       </div>
     );
   };
@@ -550,11 +504,6 @@ export default function MonthlyExpenseReport({
             </TableFooter>
           </Table>
         </div>
-        <FinancialPeriodSummary
-          income={yearIncomeTotal}
-          expense={totalAll}
-          title={`Muhtasari wa Mwaka ${year}`}
-        />
       </div>
     );
   };
@@ -602,27 +551,6 @@ export default function MonthlyExpenseReport({
           <Download className="h-4 w-4 mr-1" />
           Hamisha Excel
         </Button>
-      </div>
-
-      {/* Signature area */}
-      <div className="flex justify-between gap-8 mt-4 pt-6 border-t border-emerald-200">
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mudir: {currentOrg?.mudirName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mudirSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700 space-y-2">
-            Mwekahazina: {currentOrg?.mwekahazinaName || '_________________________'}
-            <div>Sahihi: {currentOrg?.mwekahazinaSignature || '_________________________'}</div>
-          </div>
-        </div>
-        <div className="text-center flex-1">
-          <div className="border-t border-gray-400 mt-12 pt-2 text-sm text-gray-700">
-            Tarehe: _________________________
-          </div>
-        </div>
       </div>
 
       {/* Table(s) */}
@@ -692,7 +620,6 @@ export default function MonthlyExpenseReport({
             </TableFooter>
           </Table>
         </div>
-        <FinancialPeriodSummary income={periodIncomeTotal} expense={grandTotal} />
         </div>
       )}
     </div>
