@@ -1,0 +1,13 @@
+[build]
+  command = "npm run cap:build:web"
+  publish = "out"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/manifest.json"
+  [headers.values]
+    Cache-Control = "no-cache"

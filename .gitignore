@@ -23,6 +23,9 @@ node_modules
 # misc
 .DS_Store
 *.pem
+*.jks
+*.keystore
+android/keystore.properties
 
 # debug
 npm-debug.log*

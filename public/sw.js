@@ -18,7 +18,7 @@ const STATIC_ASSETS = [
   '/icons/icon-192x192.png',
   '/icons/icon-384x384.png',
   '/icons/icon-512x512.png',
-  '/logo-amyc.png',
+  '/logo-amyc.jpeg',
 ];
 
 // File extensions for cache-first strategy (static assets)
